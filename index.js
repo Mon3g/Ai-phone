@@ -3,7 +3,7 @@ import expressWs from "express-ws";
 import WebSocket from "ws";
 import fetch from "node-fetch";
 import fs from "fs";
-import { encodeMuLaw } from "./utils/encodeMuLaw.js";
+import  encodeMuLaw  from "./utils/encodeMuLaw.js";
 
 const PORT = process.env.PORT || 10000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
