@@ -2,7 +2,7 @@ import express from "express";
 import expressWs from "express-ws";
 import WebSocket from "ws";
 import fetch from "node-fetch";
-import { encodeMuLaw } from "./utils/encodeMuLaw.js";
+import encodeMuLaw from "./utils/encodeMuLaw.js";
 import { decode as base64Decode } from "base64-arraybuffer";
 
 const app = express();
