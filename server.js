@@ -1,7 +1,7 @@
 import express from "express";
 import bodyParser from "body-parser";
 import { WebSocketServer } from "ws";
-import WebSocket from "ws"; // Needed for OpenAI connection
+import WebSocket from "ws";
 import { Buffer } from "buffer";
 
 const app = express();
@@ -26,58 +26,81 @@ const wss = new WebSocketServer({ noServer: true });
 wss.on("connection", async (twilioWS) => {
   console.log("✅ Twilio call connected (streaming)");
 
-  // Connect to OpenAI Realtime API
+  // Connect to OpenAI
   const openaiWS = await connectToOpenAI();
 
-  // Forward audio from Twilio → OpenAI
-  twilioWS.on("message", (message) => {
-    try {
-      const msg = JSON.parse(message.toString());
+  let audioBuffer = [];
 
-      // Twilio sends keepalive events, we only care about media
-      if (msg.event === "media" && msg.media?.payload) {
-        const audioData = Buffer.from(msg.media.payload, "base64");
-        openaiWS.send(
-          JSON.stringify({
-            type: "input_audio_buffer.append",
-            audio: audioData.toString("base64"),
-          })
-        );
-      } else if (msg.event === "stop") {
-        console.log("🛑 Call ended by Twilio");
-        openaiWS.close();
-      }
-    } catch (err) {
-      console.error("❌ Error parsing Twilio message:", err);
+  twilioWS.on("message", (message) => {
+    const msg = JSON.parse(message.toString());
+
+    if (msg.event === "media" && msg.media?.payload) {
+      // Collect PCM μ-law audio from Twilio
+      const audioChunk = Buffer.from(msg.media.payload, "base64");
+      audioBuffer.push(audioChunk);
+    }
+
+    if (msg.event === "mark" || msg.event === "stop") {
+      console.log("🛑 Caller hung up or stream stopped.");
+      openaiWS.close();
     }
   });
 
-  // Forward AI audio → Twilio
-  openaiWS.on("message", (data) => {
-    try {
-      const event = JSON.parse(data.toString());
+  // Periodically send collected audio to OpenAI
+  const interval = setInterval(() => {
+    if (audioBuffer.length > 0) {
+      const chunk = Buffer.concat(audioBuffer);
+      audioBuffer = [];
 
-      if (event.type === "output_audio_buffer.delta") {
-        // Send audio back to Twilio
-        twilioWS.send(
-          JSON.stringify({
-            event: "media",
-            media: { payload: event.audio },
-          })
-        );
-      }
-    } catch (err) {
-      console.error("❌ Error handling OpenAI message:", err);
+      // Send chunk to OpenAI
+      openaiWS.send(
+        JSON.stringify({
+          type: "input_audio_buffer.append",
+          audio: chunk.toString("base64"), // Send as base64 PCM
+        })
+      );
+
+      // Commit so GPT processes it
+      openaiWS.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+
+      // Request GPT to respond
+      openaiWS.send(
+        JSON.stringify({
+          type: "response.create",
+          response: {
+            modalities: ["audio"],
+            instructions:
+              "You are a helpful phone assistant. Reply conversationally.",
+            voice: "verse",
+          },
+        })
+      );
+    }
+  }, 1000);
+
+  // Handle OpenAI audio output
+  openaiWS.on("message", (data) => {
+    const event = JSON.parse(data.toString());
+
+    if (event.type === "output_audio_buffer.delta" && event.audio) {
+      // Forward AI audio to Twilio
+      twilioWS.send(
+        JSON.stringify({
+          event: "media",
+          media: { payload: event.audio },
+        })
+      );
     }
   });
 
   twilioWS.on("close", () => {
     console.log("❌ Twilio WebSocket closed");
+    clearInterval(interval);
     openaiWS.close();
   });
 });
 
-// === 3. CREATE HTTP SERVER AND UPGRADE TO WS ===
+// === 3. HTTP SERVER + WS UPGRADE ===
 const server = app.listen(process.env.PORT || 3000, () =>
   console.log("🚀 Server running")
 );
@@ -103,17 +126,6 @@ async function connectToOpenAI() {
 
     ws.on("open", () => {
       console.log("🔗 Connected to OpenAI Realtime API");
-      // Start session with audio output enabled
-      ws.send(
-        JSON.stringify({
-          type: "response.create",
-          response: {
-            modalities: ["audio"],
-            instructions: "You are a helpful phone assistant. Reply conversationally.",
-            voice: "verse", // or alloy, nova, etc.
-          },
-        })
-      );
       resolve(ws);
     });
 
