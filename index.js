@@ -12,46 +12,92 @@ expressWs(app);
 app.ws("/twilio-stream", async (ws, req) => {
   console.log("✅ Twilio WebSocket connected");
 
-  const openAiWs = new WebSocket("wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview", {
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      "OpenAI-Beta": "realtime=v1",
-    },
-  });
+  // Connect to OpenAI Realtime API
+  const openAiWs = new WebSocket(
+    "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview",
+    {
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "OpenAI-Beta": "realtime=v1",
+      },
+    }
+  );
 
   let openAiReady = false;
   let pendingMessages = [];
   let twilioReady = false;
   let bufferedAudio = [];
 
+  // --- Conversation control ---
+  let silenceTimer = null;
+  const SILENCE_TIMEOUT = 800; // ms with no audio before triggering GPT
+
+  function scheduleResponse() {
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => {
+      if (openAiReady) {
+        console.log("🤖 Detected pause — asking GPT to respond...");
+        openAiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+        openAiWs.send(
+          JSON.stringify({
+            type: "response.create",
+            response: {
+              modalities: ["audio", "text"],
+              instructions:
+                "Respond naturally and conversationally to what the caller just said. Keep answers short and friendly.",
+            },
+          })
+        );
+      }
+    }, SILENCE_TIMEOUT);
+  }
+
+  // --- OpenAI Events ---
   openAiWs.on("open", () => {
     console.log("🔗 Connected to OpenAI Realtime API");
     openAiReady = true;
+
+    // Flush pending messages
     pendingMessages.forEach((msg) => openAiWs.send(msg));
     pendingMessages = [];
+
+    // Greet the caller right away
+    openAiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+    openAiWs.send(
+      JSON.stringify({
+        type: "response.create",
+        response: {
+          modalities: ["audio", "text"],
+          instructions:
+            "Hi there! I'm your AI assistant. How can I help you today?",
+        },
+      })
+    );
   });
 
   openAiWs.on("message", (message) => {
     const event = JSON.parse(message);
 
-    if (event.type === "session.created") {
+    if (event.type === "session.created")
       console.log("📡 OpenAI Event: session.created");
-    }
 
-    if (event.type === "response.created") {
+    if (event.type === "response.created")
       console.log("📡 OpenAI Event: response.created");
-    }
 
     if (event.type === "response.audio.delta") {
       const ulawBuffer = Buffer.from(event.delta, "base64");
+
       if (!twilioReady) {
         bufferedAudio.push(ulawBuffer);
         return;
       }
-      ws.send(JSON.stringify({
-        event: "media",
-        media: { payload: ulawBuffer.toString("base64") }
-      }));
+
+      ws.send(
+        JSON.stringify({
+          event: "media",
+          media: { payload: ulawBuffer.toString("base64") },
+        })
+      );
     }
 
     if (event.type === "response.audio.done") {
@@ -63,6 +109,7 @@ app.ws("/twilio-stream", async (ws, req) => {
     }
   });
 
+  // --- Twilio Events ---
   ws.on("message", (msg) => {
     const data = JSON.parse(msg);
 
@@ -70,28 +117,20 @@ app.ws("/twilio-stream", async (ws, req) => {
       console.log("📞 Call started");
       twilioReady = true;
 
-      // ✅ Immediately request GPT to speak a greeting
-      if (openAiReady) {
-        openAiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
-        openAiWs.send(JSON.stringify({
-          type: "response.create",
-          response: {
-            modalities: ["audio", "text"],
-            instructions: "Hello there! This is your AI assistant speaking. How can I help you today?"
-          }
-        }));
-      }
-
-      bufferedAudio.forEach(chunk => {
-        ws.send(JSON.stringify({
-          event: "media",
-          media: { payload: chunk.toString("base64") }
-        }));
+      // Flush any buffered GPT audio
+      bufferedAudio.forEach((chunk) => {
+        ws.send(
+          JSON.stringify({
+            event: "media",
+            media: { payload: chunk.toString("base64") },
+          })
+        );
       });
       bufferedAudio = [];
     }
 
     if (data.event === "media") {
+      // Caller speech → OpenAI
       const audioBuffer = Buffer.from(data.media.payload, "base64");
       const base64Audio = audioBuffer.toString("base64");
 
@@ -102,6 +141,9 @@ app.ws("/twilio-stream", async (ws, req) => {
 
       if (openAiReady) openAiWs.send(message);
       else pendingMessages.push(message);
+
+      // Restart silence timer each time we get audio
+      scheduleResponse();
     }
 
     if (data.event === "stop") {
