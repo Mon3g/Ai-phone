@@ -1,17 +1,17 @@
 import express from "express";
 import expressWs from "express-ws";
 import WebSocket from "ws";
-import fetch from "node-fetch";
 import base64js from "base64-js";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
+const OPENAI_REALTIME_URL =
+  "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
 
 // Setup Express + WebSocket
 const app = express();
 expressWs(app);
 
-// μ-law decode table
+// μ-law decode lookup table
 const muLawDecodeTable = new Int16Array(256);
 for (let i = 0; i < 256; i++) {
   let u = ~i;
@@ -43,7 +43,9 @@ function encodeMuLaw(pcmData) {
     sample += BIAS;
 
     let exponent = 7;
-    for (let expMask = 0x4000; (sample & expMask) === 0 && exponent > 0; exponent--, expMask >>= 1);
+    for (let expMask = 0x4000;
+      (sample & expMask) === 0 && exponent > 0;
+      exponent--, expMask >>= 1);
     let mantissa = (sample >> (exponent + 3)) & 0x0f;
     let ulawByte = ~(sign | (exponent << 4) | mantissa);
     muLawData[i] = ulawByte;
@@ -55,7 +57,6 @@ function encodeMuLaw(pcmData) {
 app.ws("/twilio-stream", async (ws, req) => {
   console.log("✅ Twilio WebSocket connected");
 
-  // Queue Twilio audio until OpenAI is ready
   const pendingAudio = [];
   let openaiReady = false;
 
@@ -71,7 +72,7 @@ app.ws("/twilio-stream", async (ws, req) => {
     console.log("🔗 Connected to OpenAI Realtime API");
     openaiReady = true;
 
-    // Flush queued audio
+    // Flush any queued audio
     for (const audio of pendingAudio) {
       openaiWS.send(JSON.stringify({
         type: "input_audio_buffer.append",
@@ -80,7 +81,7 @@ app.ws("/twilio-stream", async (ws, req) => {
     }
     pendingAudio.length = 0;
 
-    // Ask GPT to reply in PCM16
+    // Ask GPT to reply with PCM16 audio
     openaiWS.send(JSON.stringify({
       type: "response.create",
       response: {
@@ -92,9 +93,15 @@ app.ws("/twilio-stream", async (ws, req) => {
     }));
   });
 
-  // Handle OpenAI events
+  // Handle OpenAI messages
   openaiWS.on("message", (raw) => {
     const event = JSON.parse(raw.toString());
+
+    if (event.type === "error") {
+      console.error("📡 OpenAI ERROR:", JSON.stringify(event, null, 2));
+      return;
+    }
+
     console.log("📡 OpenAI Event:", event.type);
 
     if (event.type === "output_audio_buffer.delta") {
@@ -109,6 +116,7 @@ app.ws("/twilio-stream", async (ws, req) => {
     }
   });
 
+  // Handle Twilio messages
   ws.on("message", (msg) => {
     const data = JSON.parse(msg);
 
