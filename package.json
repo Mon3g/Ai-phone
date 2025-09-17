@@ -8,6 +8,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "base64-arraybuffer": "^1.0.2",
     "base64-js": "^1.5.1",
     "express": "^4.19.2",
     "express-ws": "^5.0.2",
