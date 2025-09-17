@@ -27,8 +27,8 @@ app.ws("/twilio-stream", async (ws, req) => {
   let twilioReady = false;
   let bufferedAudio = [];
   let receivedAudio = false;
-
   let silenceTimer = null;
+
   const SILENCE_TIMEOUT = 800;
 
   function scheduleResponse() {
@@ -44,10 +44,11 @@ app.ws("/twilio-stream", async (ws, req) => {
               modalities: ["audio", "text"],
               instructions:
                 "Respond naturally and conversationally to what the caller just said. Keep answers short and friendly.",
+              audio: { format: "pcm16", sample_rate: 8000 },
             },
           })
         );
-        receivedAudio = false; // reset flag for next turn
+        receivedAudio = false;
       }
     }, SILENCE_TIMEOUT);
   }
@@ -69,8 +70,13 @@ app.ws("/twilio-stream", async (ws, req) => {
     if (event.type === "response.created")
       console.log("📡 OpenAI Event: response.created");
 
-    if (event.type === "response.audio.delta") {
-      const ulawBuffer = Buffer.from(event.delta, "base64");
+    if (event.type === "response.audio.delta" && event.delta) {
+      // Decode OpenAI base64 -> PCM16
+      const pcmBuffer = Buffer.from(event.delta, "base64");
+
+      // Convert PCM16 -> μ-law
+      const ulawBuffer = encodeMuLaw(pcmBuffer);
+
       if (!twilioReady) {
         bufferedAudio.push(ulawBuffer);
         return;
@@ -84,13 +90,11 @@ app.ws("/twilio-stream", async (ws, req) => {
       );
     }
 
-    if (event.type === "response.audio.done") {
+    if (event.type === "response.audio.done")
       console.log("📡 OpenAI Event: response.audio.done");
-    }
 
-    if (event.type === "error") {
+    if (event.type === "error")
       console.error("📡 OpenAI ERROR:", JSON.stringify(event, null, 2));
-    }
   });
 
   ws.on("message", (msg) => {
@@ -142,4 +146,3 @@ app.ws("/twilio-stream", async (ws, req) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
-
