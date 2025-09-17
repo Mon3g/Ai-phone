@@ -1,15 +1,16 @@
 {
-  "name": "twilio-realtime-voice",
+  "name": "twilio-openai-realtime",
   "version": "1.0.0",
+  "description": "Twilio <-> OpenAI Realtime API bridge",
   "type": "module",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js"
   },
   "dependencies": {
+    "base64-js": "^1.5.1",
     "express": "^4.19.2",
-    "ws": "^8.18.0",
-    "body-parser": "^1.20.2",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "ws": "^8.17.0"
   }
 }
