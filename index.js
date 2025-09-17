@@ -80,11 +80,11 @@ app.ws("/twilio-stream", async (ws, req) => {
     }
     pendingAudio.length = 0;
 
-    // Ask GPT to reply (no custom audio param)
+    // ✅ Request both audio + text
     openaiWS.send(JSON.stringify({
       type: "response.create",
       response: {
-        modalities: ["audio"],
+        modalities: ["audio", "text"],
         instructions: "Reply conversationally and briefly.",
         voice: "verse"
       }
