@@ -12,7 +12,6 @@ expressWs(app);
 app.ws("/twilio-stream", async (ws, req) => {
   console.log("✅ Twilio WebSocket connected");
 
-  // Connect to OpenAI Realtime API
   const openAiWs = new WebSocket("wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview", {
     headers: {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -25,11 +24,9 @@ app.ws("/twilio-stream", async (ws, req) => {
   let twilioReady = false;
   let bufferedAudio = [];
 
-  // When OpenAI WS is ready, flush pending messages
   openAiWs.on("open", () => {
     console.log("🔗 Connected to OpenAI Realtime API");
     openAiReady = true;
-
     pendingMessages.forEach((msg) => openAiWs.send(msg));
     pendingMessages = [];
   });
@@ -47,12 +44,10 @@ app.ws("/twilio-stream", async (ws, req) => {
 
     if (event.type === "response.audio.delta") {
       const ulawBuffer = Buffer.from(event.delta, "base64");
-
       if (!twilioReady) {
         bufferedAudio.push(ulawBuffer);
         return;
       }
-
       ws.send(JSON.stringify({
         event: "media",
         media: { payload: ulawBuffer.toString("base64") }
@@ -75,6 +70,18 @@ app.ws("/twilio-stream", async (ws, req) => {
       console.log("📞 Call started");
       twilioReady = true;
 
+      // ✅ Immediately request GPT to speak a greeting
+      if (openAiReady) {
+        openAiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+        openAiWs.send(JSON.stringify({
+          type: "response.create",
+          response: {
+            modalities: ["audio", "text"],
+            instructions: "Hello there! This is your AI assistant speaking. How can I help you today?"
+          }
+        }));
+      }
+
       bufferedAudio.forEach(chunk => {
         ws.send(JSON.stringify({
           event: "media",
@@ -93,11 +100,8 @@ app.ws("/twilio-stream", async (ws, req) => {
         audio: base64Audio,
       });
 
-      if (openAiReady) {
-        openAiWs.send(message);
-      } else {
-        pendingMessages.push(message);
-      }
+      if (openAiReady) openAiWs.send(message);
+      else pendingMessages.push(message);
     }
 
     if (data.event === "stop") {
