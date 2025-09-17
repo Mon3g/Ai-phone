@@ -1,9 +1,7 @@
 import express from "express";
 import expressWs from "express-ws";
 import WebSocket from "ws";
-import fetch from "node-fetch";
-import fs from "fs";
-import  encodeMuLaw  from "./utils/encodeMuLaw.js";
+import encodeMuLaw from "./utils/encodeMuLaw.js";
 
 const PORT = process.env.PORT || 10000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -22,11 +20,18 @@ app.ws("/twilio-stream", async (ws, req) => {
     },
   });
 
+  let openAiReady = false;
+  let pendingMessages = [];
   let twilioReady = false;
   let bufferedAudio = [];
 
+  // When OpenAI WS is ready, flush pending messages
   openAiWs.on("open", () => {
     console.log("🔗 Connected to OpenAI Realtime API");
+    openAiReady = true;
+
+    pendingMessages.forEach((msg) => openAiWs.send(msg));
+    pendingMessages = [];
   });
 
   openAiWs.on("message", (message) => {
@@ -43,13 +48,11 @@ app.ws("/twilio-stream", async (ws, req) => {
     if (event.type === "response.audio.delta") {
       const ulawBuffer = Buffer.from(event.delta, "base64");
 
-      // Buffer until Twilio is ready
       if (!twilioReady) {
         bufferedAudio.push(ulawBuffer);
         return;
       }
 
-      // Send immediately if Twilio is ready
       ws.send(JSON.stringify({
         event: "media",
         media: { payload: ulawBuffer.toString("base64") }
@@ -72,7 +75,6 @@ app.ws("/twilio-stream", async (ws, req) => {
       console.log("📞 Call started");
       twilioReady = true;
 
-      // Flush any buffered audio
       bufferedAudio.forEach(chunk => {
         ws.send(JSON.stringify({
           event: "media",
@@ -83,14 +85,19 @@ app.ws("/twilio-stream", async (ws, req) => {
     }
 
     if (data.event === "media") {
-      // Convert inbound Twilio PCM μ-law → base64 and send to OpenAI
       const audioBuffer = Buffer.from(data.media.payload, "base64");
       const base64Audio = audioBuffer.toString("base64");
 
-      openAiWs.send(JSON.stringify({
+      const message = JSON.stringify({
         type: "input_audio_buffer.append",
         audio: base64Audio,
-      }));
+      });
+
+      if (openAiReady) {
+        openAiWs.send(message);
+      } else {
+        pendingMessages.push(message);
+      }
     }
 
     if (data.event === "stop") {
