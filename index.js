@@ -7,7 +7,6 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_REALTIME_URL =
   "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
 
-// Setup Express + WebSocket
 const app = express();
 expressWs(app);
 
@@ -72,7 +71,7 @@ app.ws("/twilio-stream", async (ws, req) => {
     console.log("🔗 Connected to OpenAI Realtime API");
     openaiReady = true;
 
-    // Flush any queued audio
+    // Flush queued audio
     for (const audio of pendingAudio) {
       openaiWS.send(JSON.stringify({
         type: "input_audio_buffer.append",
@@ -81,12 +80,11 @@ app.ws("/twilio-stream", async (ws, req) => {
     }
     pendingAudio.length = 0;
 
-    // Ask GPT to reply with PCM16 audio
+    // Ask GPT to reply (no custom audio param)
     openaiWS.send(JSON.stringify({
       type: "response.create",
       response: {
         modalities: ["audio"],
-        audio: { format: "pcm16" },
         instructions: "Reply conversationally and briefly.",
         voice: "verse"
       }
