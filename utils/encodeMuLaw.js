@@ -1,40 +1,39 @@
 // utils/encodeMuLaw.js
-// μ-law encoder for PCM16 audio → G.711 μ-law (8kHz)
-
 export default function encodeMuLaw(pcm16Buffer) {
-  const pcm16 = new Int16Array(
+  // Convert PCM16 buffer -> Int16Array for sample processing
+  const samples = new Int16Array(
     pcm16Buffer.buffer,
     pcm16Buffer.byteOffset,
     pcm16Buffer.length / 2
   );
-  const ulaw = Buffer.alloc(pcm16.length);
 
-  for (let i = 0; i < pcm16.length; i++) {
-    let sample = pcm16[i];
+  const ulawBuffer = Buffer.alloc(samples.length);
 
-    // μ-law constants
-    const BIAS = 0x84;
-    const CLIP = 32635;
-
-    if (sample > CLIP) sample = CLIP;
-    else if (sample < -CLIP) sample = -CLIP;
-
-    let sign = sample < 0 ? 0x7F : 0xFF;
-    sample = Math.abs(sample) + BIAS;
-
-    // Find exponent
-    let exponent = 7;
-    for (
-      let expMask = 0x4000;
-      (sample & expMask) === 0 && exponent > 0;
-      exponent--, expMask >>= 1
-    );
-
-    // Compute mantissa
-    let mantissa = (sample >> ((exponent === 0) ? 4 : (exponent + 3))) & 0x0F;
-
-    ulaw[i] = sign ^ ((exponent << 4) | mantissa);
+  for (let i = 0; i < samples.length; i++) {
+    ulawBuffer[i] = linearToMuLawSample(samples[i]);
   }
 
-  return ulaw;
+  return ulawBuffer;
+}
+
+// μ-law encoding algorithm (standard ITU G.711 implementation)
+function linearToMuLawSample(sample) {
+  const MU = 255;
+  const MAX = 32768;
+
+  // Clamp to prevent overflow
+  sample = Math.max(-MAX, Math.min(MAX, sample));
+
+  // Get sign and magnitude
+  const sign = sample < 0 ? 0x80 : 0x00;
+  let magnitude = Math.abs(sample);
+
+  // μ-law compression
+  let exponent = 7;
+  for (let expMask = 0x4000; (magnitude & expMask) === 0 && exponent > 0; exponent--, expMask >>= 1) {}
+
+  let mantissa = (magnitude >> ((exponent === 0 ? 4 : exponent + 3))) & 0x0F;
+  let ulawByte = ~(sign | (exponent << 4) | mantissa);
+
+  return ulawByte & 0xFF;
 }
