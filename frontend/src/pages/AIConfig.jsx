@@ -57,13 +57,16 @@ const AIConfig = () => {
         .update(config)
         .eq('id', config.id);
     } else {
-      await supabase
+      const { data } = await supabase
         .from('assistant_settings')
-        .insert([{ ...config, user_id: user.id }]);
+        .insert([{ ...config, user_id: user.id }])
+        .select();
+      if (data) {
+        setConfig(data[0]);
+      }
     }
 
     setSaving(false);
-    fetchConfig();
   };
 
   return (
