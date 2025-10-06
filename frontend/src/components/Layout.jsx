@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Phone, Settings, Key, BarChart3, FileText, Menu, X } from 'lucide-react';
+import { Phone, Settings, Key, ChartBar as BarChart3, FileText, Menu, X } from 'lucide-react';
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);

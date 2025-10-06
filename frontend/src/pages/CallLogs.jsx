@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Download, Filter } from 'lucide-react';
+import { Search, Download, ListFilter as Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const CallLogs = () => {

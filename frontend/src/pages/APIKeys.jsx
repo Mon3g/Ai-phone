@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Save, RefreshCw, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
+import { Eye, EyeOff, Save, RefreshCw, ExternalLink, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const APIKeys = () => {
