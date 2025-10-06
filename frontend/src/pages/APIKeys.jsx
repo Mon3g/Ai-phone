@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Save, RefreshCw, ExternalLink, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  Save,
+  RefreshCw,
+  ExternalLink,
+  CircleCheck as CheckCircle,
+  Circle as XCircle,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const APIKeys = () => {
@@ -7,14 +15,14 @@ const APIKeys = () => {
   const [showKeys, setShowKeys] = useState({
     openai: false,
     twilio_auth: false,
-    ngrok: false
+    ngrok: false,
   });
   const [config, setConfig] = useState({
     openai_api_key: '',
     twilio_account_sid: '',
     twilio_auth_token: '',
     twilio_phone_number: '',
-    ngrok_auth_token: ''
+    ngrok_auth_token: '',
   });
   const [webhookUrl, setWebhookUrl] = useState('https://your-ngrok-url.ngrok.app/incoming-call');
 
@@ -23,7 +31,9 @@ const APIKeys = () => {
   }, []);
 
   const fetchConfig = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data } = await supabase
@@ -39,14 +49,16 @@ const APIKeys = () => {
         twilio_account_sid: data.twilio_account_sid || '',
         twilio_auth_token: data.twilio_auth_token || '',
         twilio_phone_number: data.twilio_phone_number || '',
-        ngrok_auth_token: data.ngrok_auth_token || ''
+        ngrok_auth_token: data.ngrok_auth_token || '',
       });
     }
   };
 
   const handleSave = async () => {
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       setSaving(false);
       return;
@@ -60,10 +72,7 @@ const APIKeys = () => {
       .maybeSingle();
 
     if (existing) {
-      await supabase
-        .from('assistant_settings')
-        .update(config)
-        .eq('id', existing.id);
+      await supabase.from('assistant_settings').update(config).eq('id', existing.id);
     } else {
       await supabase
         .from('assistant_settings')
@@ -92,9 +101,7 @@ const APIKeys = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">API Keys</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Configure your API keys and credentials
-          </p>
+          <p className="mt-1 text-sm text-gray-500">Configure your API keys and credentials</p>
         </div>
         <button
           onClick={handleSave}
@@ -133,9 +140,7 @@ const APIKeys = () => {
           </a>
         </div>
         <div className="p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            API Key
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">API Key</label>
           <div className="flex space-x-2">
             <input
               type={showKeys.openai ? 'text' : 'password'}
@@ -173,9 +178,7 @@ const APIKeys = () => {
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Account SID
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Account SID</label>
             <input
               type="text"
               value={config.twilio_account_sid}
@@ -185,9 +188,7 @@ const APIKeys = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Auth Token
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Auth Token</label>
             <div className="flex space-x-2">
               <input
                 type={showKeys.twilio_auth ? 'text' : 'password'}
@@ -200,14 +201,16 @@ const APIKeys = () => {
                 onClick={() => toggleShowKey('twilio_auth')}
                 className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                {showKeys.twilio_auth ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                {showKeys.twilio_auth ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
               </button>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Phone Number
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
             <input
               type="text"
               value={config.twilio_phone_number}
@@ -238,9 +241,7 @@ const APIKeys = () => {
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Auth Token
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Auth Token</label>
             <div className="flex space-x-2">
               <input
                 type={showKeys.ngrok ? 'text' : 'password'}

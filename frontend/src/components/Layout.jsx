@@ -1,9 +1,27 @@
-import { useState } from 'react';
-import { Phone, Settings, Key, ChartBar as BarChart3, FileText, Menu, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Phone, Settings, Key, ChartBar as BarChart3, FileText, Menu, X, LogOut } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
+import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const nav = useNavigate();
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setCurrentUser(data.session?.user ?? null);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user ?? null);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   const navigation = [
     { name: 'Dashboard', icon: BarChart3, href: '/', current: true },
@@ -92,6 +110,34 @@ const Layout = ({ children }) => {
                   <span className="text-sm text-gray-600 dark:text-gray-300">Connected</span>
                 </div>
                 <ThemeToggle />
+              </div>
+
+              {/* Auth controls */}
+              <div className="ml-4 relative">
+                {!currentUser ? (
+                  <button
+                    onClick={() => nav('/login')}
+                    className="px-3 py-1 rounded-md bg-primary-600 text-white"
+                  >
+                    Sign in
+                  </button>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-sm text-gray-800 dark:text-gray-200">
+                      {currentUser?.email?.[0]?.toUpperCase()}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await supabase.auth.signOut();
+                        nav('/login');
+                      }}
+                      className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                      title="Sign out"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

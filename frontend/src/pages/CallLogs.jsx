@@ -14,7 +14,9 @@ const CallLogs = () => {
 
   const fetchLogs = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       setLoading(false);
       return;
@@ -43,19 +45,16 @@ const CallLogs = () => {
 
   const exportToCSV = () => {
     const headers = ['Date', 'From', 'To', 'Duration', 'Status', 'Call SID'];
-    const rows = filteredLogs.map(log => [
+    const rows = filteredLogs.map((log) => [
       new Date(log.created_at).toLocaleString(),
       log.from_number || 'N/A',
       log.to_number || 'N/A',
       log.duration + 's',
       log.status,
-      log.call_sid || 'N/A'
+      log.call_sid || 'N/A',
     ]);
 
-    const csv = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
+    const csv = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -83,9 +82,7 @@ const CallLogs = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Call Logs</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            View and manage your call history
-          </p>
+          <p className="mt-1 text-sm text-gray-500">View and manage your call history</p>
         </div>
         <button
           onClick={exportToCSV}
@@ -181,7 +178,9 @@ const CallLogs = () => {
                       {log.duration ? `${log.duration}s` : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(log.status)}`}>
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(log.status)}`}
+                      >
                         {log.status || 'unknown'}
                       </span>
                     </td>
@@ -207,19 +206,23 @@ const CallLogs = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">
-                {Math.round(filteredLogs.reduce((sum, log) => sum + (log.duration || 0), 0) / filteredLogs.length)}s
+                {Math.round(
+                  filteredLogs.reduce((sum, log) => sum + (log.duration || 0), 0) /
+                    filteredLogs.length
+                )}
+                s
               </p>
               <p className="text-sm text-gray-500">Avg Duration</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">
-                {filteredLogs.filter(log => log.status === 'completed').length}
+                {filteredLogs.filter((log) => log.status === 'completed').length}
               </p>
               <p className="text-sm text-gray-500">Completed</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">
-                {filteredLogs.filter(log => log.status === 'failed').length}
+                {filteredLogs.filter((log) => log.status === 'failed').length}
               </p>
               <p className="text-sm text-gray-500">Failed</p>
             </div>

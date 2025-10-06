@@ -4,7 +4,13 @@
   "description": "This application demonstrates how to use Node.js, [Twilio Voice](https://www.twilio.com/docs/voice) and [Media Streams](https://www.twilio.com/docs/voice/media-streams), and [OpenAI's Realtime API](https://platform.openai.com/docs/) to make a phone call to speak with an AI Assistant.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "node index.js",
+    "configure-twilio": "node ./scripts/configure-twilio.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint:frontend": "cd frontend && npm run lint",
+    "format": "prettier --write \"**/*.{js,jsx,json,md,css}\"",
+    "prepare": "husky install"
   },
   "keywords": [],
   "author": "",
@@ -14,8 +20,31 @@
     "@fastify/formbody": "^8.0.2",
     "@fastify/websocket": "^11.2.0",
     "@ngrok/ngrok": "^1.5.2",
+    "@supabase/supabase-js": "^2.58.0",
     "dotenv": "^16.6.1",
     "fastify": "^5.6.1",
+    "twilio": "^4.0.0",
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "husky": "^8.0.0",
+    "lint-staged": "^14.0.0",
+    "prettier": "^3.0.0"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,json,css,md}": [
+      "prettier --write"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mon3g/Ai-phone.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Mon3g/Ai-phone/issues"
+  },
+  "homepage": "https://github.com/Mon3g/Ai-phone#readme",
+  "directories": {
+    "doc": "docs"
   }
 }

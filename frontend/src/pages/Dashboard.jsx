@@ -7,7 +7,7 @@ const Dashboard = () => {
     totalCalls: 0,
     avgDuration: 0,
     activeConfig: null,
-    recentCalls: []
+    recentCalls: [],
   });
 
   useEffect(() => {
@@ -15,7 +15,9 @@ const Dashboard = () => {
   }, []);
 
   const fetchDashboardData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data: calls } = await supabase
@@ -38,7 +40,7 @@ const Dashboard = () => {
         totalCalls: calls.length,
         avgDuration: calls.length > 0 ? Math.round(totalDuration / calls.length) : 0,
         activeConfig,
-        recentCalls: calls
+        recentCalls: calls,
       });
     }
   };
@@ -49,38 +51,36 @@ const Dashboard = () => {
       value: stats.totalCalls,
       icon: Phone,
       color: 'bg-blue-500',
-      change: '+12%'
+      change: '+12%',
     },
     {
       name: 'Avg Duration',
       value: `${stats.avgDuration}s`,
       icon: Clock,
       color: 'bg-green-500',
-      change: '+4.5%'
+      change: '+4.5%',
     },
     {
       name: 'Status',
       value: stats.activeConfig ? 'Active' : 'Inactive',
       icon: Activity,
       color: 'bg-yellow-500',
-      change: stats.activeConfig ? 'Running' : 'Stopped'
+      change: stats.activeConfig ? 'Running' : 'Stopped',
     },
     {
       name: 'This Month',
       value: '$0.00',
       icon: DollarSign,
       color: 'bg-purple-500',
-      change: 'Est. cost'
-    }
+      change: 'Est. cost',
+    },
   ];
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Overview of your AI voice assistant
-        </p>
+        <p className="mt-1 text-sm text-gray-500">Overview of your AI voice assistant</p>
       </div>
 
       {/* Stats Grid */}
@@ -92,9 +92,7 @@ const Dashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                  <p className="mt-2 text-3xl font-semibold text-gray-900">
-                    {stat.value}
-                  </p>
+                  <p className="mt-2 text-3xl font-semibold text-gray-900">{stat.value}</p>
                   <p className="mt-2 text-xs text-gray-500">{stat.change}</p>
                 </div>
                 <div className={`${stat.color} p-3 rounded-lg`}>
@@ -109,9 +107,7 @@ const Dashboard = () => {
       {/* Active Configuration */}
       {stats.activeConfig && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Active Configuration
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Configuration</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600">Name</p>
