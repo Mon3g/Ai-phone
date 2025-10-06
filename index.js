@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 import dotenv from 'dotenv';
 import fastifyFormBody from '@fastify/formbody';
 import fastifyWs from '@fastify/websocket';
+import ngrok from '@ngrok/ngrok';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -267,10 +268,20 @@ fastify.register(async (fastify) => {
     });
 });
 
-fastify.listen({ port: PORT }, (err) => {
+fastify.listen({ port: PORT }, async (err) => {
     if (err) {
         console.error(err);
         process.exit(1);
     }
     console.log(`Server is listening on port ${PORT}`);
+
+    try {
+        const listener = await ngrok.forward({ addr: PORT, authtoken_from_env: true });
+        console.log(`\n🌐 ngrok tunnel created: ${listener.url()}`);
+        console.log(`📞 Set your Twilio webhook to: ${listener.url()}/incoming-call\n`);
+    } catch (error) {
+        console.log('\n⚠️  ngrok tunnel not created. You can:');
+        console.log('   1. Set NGROK_AUTHTOKEN in .env file');
+        console.log('   2. Or run ngrok manually: ngrok http 5050\n');
+    }
 });
