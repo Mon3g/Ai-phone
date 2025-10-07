@@ -5,6 +5,7 @@ import fastifyFormBody from '@fastify/formbody';
 import fastifyWs from '@fastify/websocket';
 import ngrok from '@ngrok/ngrok';
 import { createClient } from '@supabase/supabase-js';
+import logger from './logger.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -13,12 +14,12 @@ dotenv.config();
 const { OPENAI_API_KEY } = process.env;
 
 if (!OPENAI_API_KEY) {
-  console.error('Missing OpenAI API key. Please set it in the .env file.');
+  logger.fatal('Missing OpenAI API key. Please set it in the .env file.');
   process.exit(1);
 }
 
 // Initialize Fastify
-const fastify = Fastify();
+const fastify = Fastify({ logger: false });
 fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 
@@ -33,6 +34,48 @@ fastify.addContentTypeParser('application/json', { parseAs: 'string' }, function
   } catch (err) {
     err.statusCode = 400;
     done(err, undefined);
+  }
+});
+
+fastify.addHook('onRequest', (request, reply, done) => {
+  request.startTime = process.hrtime.bigint();
+  logger.info({ reqId: request.id, method: request.method, url: request.url }, 'request received');
+  done();
+});
+
+fastify.addHook('onResponse', (request, reply, done) => {
+  const startTime = request.startTime;
+  const durationMs = startTime ? Number((process.hrtime.bigint() - startTime) / BigInt(1e6)) : undefined;
+  logger.info(
+    {
+      reqId: request.id,
+      method: request.method,
+      url: request.url,
+      statusCode: reply.statusCode,
+      responseTimeMs: durationMs,
+    },
+    'request completed'
+  );
+  done();
+});
+
+fastify.addHook('onError', (request, reply, error, done) => {
+  logger.error(
+    {
+      reqId: request.id,
+      method: request.method,
+      url: request.url,
+      statusCode: reply.statusCode,
+      err: error,
+    },
+    'request errored'
+  );
+  done();
+});
+
+fastify.setErrorHandler((error, request, reply) => {
+  if (!reply.sent) {
+    reply.status(error.statusCode || 500).send({ error: 'internal_server_error' });
   }
 });
 
@@ -59,12 +102,6 @@ const LOG_EVENT_TYPES = [
 // Show AI response elapsed timing calculations
 const SHOW_TIMING_MATH = false;
 
-// Simple logger helper
-const log = (level, ...args) => {
-  const ts = new Date().toISOString();
-  console[level](`[${ts}]`, ...args);
-};
-
 // Supabase client for server-side persona management
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
@@ -72,7 +109,7 @@ let supabase = null;
 if (supabaseUrl && supabaseServiceKey) {
   supabase = createClient(supabaseUrl, supabaseServiceKey);
 } else {
-  log('log', 'Supabase service key or URL not provided; persona APIs will be disabled.');
+  logger.warn('Supabase service key or URL not provided; persona APIs will be disabled.');
 }
 
 // Helper: Verify Bearer token from Authorization header using Supabase Admin client
@@ -113,7 +150,7 @@ fastify.all('/incoming-call', async (request, reply) => {
         .maybeSingle();
       if (data) persona = data;
     } catch (err) {
-      log('error', 'Error fetching active persona:', err);
+      logger.error({ err }, 'Error fetching active persona');
     }
   }
 
@@ -142,11 +179,11 @@ fastify.get('/api/personas', async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: 'Supabase not configured' });
   try {
     const res = await supabase.from('personas').select('*').order('created_at', { ascending: false });
-    log('log', 'Supabase /personas result:', res);
+    logger.debug({ result: res }, 'Supabase /personas result');
     const { data } = res;
     reply.send(data);
   } catch (err) {
-    log('error', 'Error listing personas', err);
+    logger.error({ err }, 'Error listing personas');
     reply.code(500).send({ error: 'list failed' });
   }
 });
@@ -160,11 +197,11 @@ fastify.post('/api/personas', async (request, reply) => {
   const payload = { ...request.body, user_id: user.id };
   try {
     const res = await supabase.from('personas').insert([payload]).select();
-    log('log', 'Supabase insert result:', res);
+    logger.debug({ result: res }, 'Supabase insert result');
     const data = Array.isArray(res.data) && res.data.length > 0 ? res.data[0] : null;
     reply.code(201).send(data);
   } catch (err) {
-    log('error', 'Error creating persona', err);
+    logger.error({ err }, 'Error creating persona');
     reply.code(500).send({ error: 'create failed' });
   }
 });
@@ -184,7 +221,7 @@ fastify.put('/api/personas/:id', async (request, reply) => {
     const { data } = await supabase.from('personas').update(payload).eq('id', id).select().single();
     reply.send(data);
   } catch (err) {
-    log('error', 'Error updating persona', err);
+    logger.error({ err }, 'Error updating persona');
     reply.code(500).send({ error: 'update failed' });
   }
 });
@@ -209,7 +246,7 @@ fastify.post('/api/personas/:id/activate', async (request, reply) => {
       .single();
     reply.send(data);
   } catch (err) {
-    log('error', 'Error activating persona', err);
+    logger.error({ err }, 'Error activating persona');
     reply.code(500).send({ error: 'activate failed' });
   }
 });
@@ -253,7 +290,7 @@ fastify.post('/api/personas/:id/preview', async (request, reply) => {
       }, timeoutMs);
 
       openAiWs.on('open', () => {
-        log('log', 'OpenAI preview WS open');
+        logger.info({ personaId: id }, 'OpenAI preview WebSocket opened');
 
         // Initialize session for audio output (request wav if supported)
         const sessionUpdate = {
@@ -325,7 +362,7 @@ fastify.post('/api/personas/:id/preview', async (request, reply) => {
     // Send result as JSON with base64 audio
     reply.send(result);
   } catch (err) {
-    log('error', 'Preview error', err);
+    logger.error({ err, personaId: id }, 'Preview error');
     reply.code(500).send({ error: 'preview failed', details: err.message });
   }
 });
@@ -334,7 +371,7 @@ fastify.post('/api/personas/:id/preview', async (request, reply) => {
 // WebSocket route for media-stream
 fastify.register(async (fastify) => {
   fastify.get('/media-stream', { websocket: true }, (connection, req) => {
-    console.log('Client connected');
+    logger.info({ streamSid: null, remoteAddress: req.socket.remoteAddress }, 'Client connected');
 
     // Connection-specific state
     let streamSid = null;
@@ -368,7 +405,7 @@ fastify.register(async (fastify) => {
         },
       };
 
-      console.log('Sending session update:', JSON.stringify(sessionUpdate));
+      logger.debug({ sessionUpdate }, 'Sending session update to OpenAI');
       openAiWs.send(JSON.stringify(sessionUpdate));
 
       // Uncomment the following line to have AI speak first:
@@ -391,8 +428,7 @@ fastify.register(async (fastify) => {
         },
       };
 
-      if (SHOW_TIMING_MATH)
-        console.log('Sending initial conversation item:', JSON.stringify(initialConversationItem));
+      if (SHOW_TIMING_MATH) logger.debug({ initialConversationItem }, 'Sending initial conversation item');
       openAiWs.send(JSON.stringify(initialConversationItem));
       openAiWs.send(JSON.stringify({ type: 'response.create' }));
     };
@@ -402,8 +438,13 @@ fastify.register(async (fastify) => {
       if (markQueue.length > 0 && responseStartTimestampTwilio != null) {
         const elapsedTime = latestMediaTimestamp - responseStartTimestampTwilio;
         if (SHOW_TIMING_MATH)
-          console.log(
-            `Calculating elapsed time for truncation: ${latestMediaTimestamp} - ${responseStartTimestampTwilio} = ${elapsedTime}ms`
+          logger.debug(
+            {
+              latestMediaTimestamp,
+              responseStartTimestampTwilio,
+              elapsedTime,
+            },
+            'Calculating elapsed time for truncation'
           );
 
         if (lastAssistantItem) {
@@ -413,8 +454,7 @@ fastify.register(async (fastify) => {
             content_index: 0,
             audio_end_ms: elapsedTime,
           };
-          if (SHOW_TIMING_MATH)
-            console.log('Sending truncation event:', JSON.stringify(truncateEvent));
+          if (SHOW_TIMING_MATH) logger.debug({ truncateEvent }, 'Sending truncation event');
           openAiWs.send(JSON.stringify(truncateEvent));
         }
 
@@ -447,7 +487,7 @@ fastify.register(async (fastify) => {
 
     // Open event for OpenAI WebSocket
     openAiWs.on('open', () => {
-      console.log('Connected to the OpenAI Realtime API');
+      logger.info('Connected to the OpenAI Realtime API');
       setTimeout(initializeSession, 100);
     });
 
@@ -457,7 +497,7 @@ fastify.register(async (fastify) => {
         const response = JSON.parse(data);
 
         if (LOG_EVENT_TYPES.includes(response.type)) {
-          console.log(`Received event: ${response.type}`, response);
+          logger.debug({ response }, `Received event: ${response.type}`);
         }
 
         if (response.type === 'response.output_audio.delta' && response.delta) {
@@ -472,9 +512,7 @@ fastify.register(async (fastify) => {
           if (!responseStartTimestampTwilio) {
             responseStartTimestampTwilio = latestMediaTimestamp;
             if (SHOW_TIMING_MATH)
-              console.log(
-                `Setting start timestamp for new response: ${responseStartTimestampTwilio}ms`
-              );
+              logger.debug({ responseStartTimestampTwilio }, 'Setting start timestamp for new response');
           }
 
           if (response.item_id) {
@@ -488,7 +526,7 @@ fastify.register(async (fastify) => {
           handleSpeechStartedEvent();
         }
       } catch (error) {
-        console.error('Error processing OpenAI message:', error, 'Raw message:', data);
+        logger.error({ err: error, rawMessage: data.toString() }, 'Error processing OpenAI message');
       }
     });
 
@@ -501,7 +539,7 @@ fastify.register(async (fastify) => {
           case 'media':
             latestMediaTimestamp = data.media.timestamp;
             if (SHOW_TIMING_MATH)
-              console.log(`Received media message with timestamp: ${latestMediaTimestamp}ms`);
+              logger.debug({ latestMediaTimestamp }, 'Received media message');
             if (openAiWs.readyState === WebSocket.OPEN) {
               const audioAppend = {
                 type: 'input_audio_buffer.append',
@@ -512,7 +550,7 @@ fastify.register(async (fastify) => {
             break;
           case 'start':
             streamSid = data.start.streamSid;
-            console.log('Incoming stream has started', streamSid);
+            logger.info({ streamSid }, 'Incoming stream has started');
 
             // Reset start and media timestamp on a new stream
             responseStartTimestampTwilio = null;
@@ -524,59 +562,68 @@ fastify.register(async (fastify) => {
             }
             break;
           default:
-            console.log('Received non-media event:', data.event);
+            logger.debug({ event: data.event }, 'Received non-media event');
             break;
         }
       } catch (error) {
-        console.error('Error parsing message:', error, 'Message:', message);
+        logger.error({ err: error, rawMessage: message.toString() }, 'Error parsing message from Twilio');
       }
     });
 
     // Handle connection close
     connection.on('close', () => {
       if (openAiWs.readyState === WebSocket.OPEN) openAiWs.close();
-      log('log', 'Client disconnected.');
+      logger.info('Client disconnected.');
     });
 
     // Handle WebSocket close and errors
     openAiWs.on('close', () => {
-      log('log', 'Disconnected from the OpenAI Realtime API');
+      logger.info('Disconnected from the OpenAI Realtime API');
     });
 
     openAiWs.on('error', (error) => {
-      log('error', 'Error in the OpenAI WebSocket:', error);
+      logger.error({ err: error }, 'Error in the OpenAI WebSocket');
     });
   });
 });
 const server = fastify.listen({ port: PORT }, async (err) => {
   if (err) {
-    log('error', err);
+    logger.error({ err }, 'Failed to start server');
     process.exit(1);
   }
-  log('log', `Server is listening on port ${PORT}`);
+  logger.info({ port: PORT }, 'Server is listening');
 
   try {
     const listener = await ngrok.forward({ addr: PORT, authtoken_from_env: true });
-    log('log', `\n🌐 ngrok tunnel created: ${listener.url()}`);
-    log('log', `📞 Set your Twilio webhook to: ${listener.url()}/incoming-call\n`);
+    logger.info({ url: listener.url() }, 'ngrok tunnel created');
+    logger.info({ url: `${listener.url()}/incoming-call` }, 'Set your Twilio webhook URL');
   } catch (error) {
-    log('log', '\n⚠️  ngrok tunnel not created. You can:');
-    log('log', '   1. Set NGROK_AUTHTOKEN in .env file');
-    log('log', '   2. Or run ngrok manually: ngrok http 5050\n');
+    logger.warn('ngrok tunnel not created automatically.');
+    logger.warn('1. Set NGROK_AUTHTOKEN in .env file');
+    logger.warn('2. Or run ngrok manually: ngrok http 5050');
   }
 });
 
 // Graceful shutdown
 const shutdown = async (signal) => {
   try {
-    log('log', `Received ${signal}. Shutting down...`);
+    logger.info({ signal }, 'Received shutdown signal');
     await fastify.close();
     process.exit(0);
   } catch (err) {
-    log('error', 'Error during shutdown', err);
+    logger.error({ err }, 'Error during shutdown');
     process.exit(1);
   }
 };
 
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ err: reason }, 'Unhandled promise rejection');
+});
+
+process.on('uncaughtException', (error) => {
+  logger.fatal({ err: error }, 'Uncaught exception');
+  process.exit(1);
+});
