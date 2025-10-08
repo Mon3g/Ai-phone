@@ -47,7 +47,7 @@ Once the tunnel has been opened, copy the `Forwarding` URL. It will look somethi
 need this when configuring your Twilio number setup.
 
 Note that the `ngrok` command above forwards to a development server running on port `5050`, which is the default port configured in this application. If
-you override the `PORT` defined in `index.js`, you will need to update the `ngrok` command accordingly.
+you override the `PORT` environment variable (see `src/config/env.js`), you will need to update the `ngrok` command accordingly.
 
 Keep in mind that each time you run the `ngrok http` command, a new URL will be created, and you'll need to update it everywhere it is referenced below.
 
@@ -103,7 +103,7 @@ If you accidentally committed secrets, rotate/revoke them and consider removing 
 Once ngrok is running, dependencies are installed, Twilio is configured properly, and the `.env` is set up, run the dev server with the following command:
 
 ```
-node index.js
+npm run dev
 ```
 
 ## Test the app
@@ -121,3 +121,18 @@ To have the AI voice assistant talk before the user, uncomment the line `// send
 When the user speaks and OpenAI sends `input_audio_buffer.speech_started`, the code will clear the Twilio Media Streams buffer and send OpenAI `conversation.item.truncate`.
 
 Depending on your application's needs, you may want to use the [`input_audio_buffer.speech_stopped`](https://platform.openai.com/docs/api-reference/realtime-server-events/input_audio_buffer/speech_stopped) event, instead.
+
+## AI persona operations
+
+The backend now exposes a dedicated persona service (`src/services/personaService.js`) that encapsulates the business logic for managing AI profiles. Each persona can be created, updated, activated, and previewed through the REST API, while the service coordinates Supabase persistence and the OpenAI Realtime preview client.
+
+Key endpoints:
+
+- `GET /api/personas` — list every persona (admin/service usage)
+- `POST /api/personas` — create a persona tied to the authenticated Supabase user
+- `PUT /api/personas/:id` — update an existing persona (ownership enforced)
+- `POST /api/personas/:id/activate` — mark the persona active for the calling user
+- `GET /api/personas/active` — retrieve the active persona for the current user (useful for UI defaulting/configuring calls)
+- `POST /api/personas/:id/preview` — trigger an OpenAI Realtime preview and return base64 WAV audio
+
+For the preview workflow, the new `OpenAiRealtimeClient` (see `src/integrations/openaiRealtime.js`) handles the WebSocket exchange so that routes remain thin and the integration can be swapped or mocked in tests.

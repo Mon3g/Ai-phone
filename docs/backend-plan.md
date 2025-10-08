@@ -8,30 +8,33 @@
 
 ## 2. โครงสร้างไดเรกทอรีที่เสนอ
 ```text
-server/
-  app.js                # จุดเริ่มต้นบูต Fastify instance และ Plugin
+src/
+  main.js                 # bootstrap หลักสำหรับ production + graceful shutdown
   config/
-    env.js              # รวมการอ่านค่าตัวแปรสภาพแวดล้อม/Default
-  routes/
-    health.js
-    calls.js            # Twilio webhook + media stream handlers
-    personas.js
-  services/
-    personas.js         # ติดต่อ Supabase และบังคับใช้กฎธุรกิจ
-    realtime.js         # เชื่อมต่อ OpenAI Realtime API
+    env.js                # รวมค่าจาก environment พร้อม default
   integrations/
-    supabase.js         # Wrapper สำหรับสร้าง client และ cache connection
-    twilio.js           # Helper สำหรับ TwiML และ media utils
+    supabase.js           # สร้าง Supabase client ฝั่งเซิร์ฟเวอร์
+    openaiRealtime.js     # client สำหรับ OpenAI Realtime API (preview/persona orchestration)
+  observability/
+    logger.js             # ตั้งค่า Pino transport (stdout + ไฟล์)
   plugins/
-    auth.js             # Bearer verification + Fastify decorator
-    logger.js           # เชื่อม Pino logger กับ Fastify
+    contentParsers.js     # parser พิเศษ (empty JSON)
+    loggingHooks.js       # hook onRequest/onResponse/onError + error handler
+  routes/
+    root.js               # healthcheck และ root message
+    incomingCall.js       # Twilio webhook -> TwiML + persona greeting
+    mediaStream.js        # Twilio media stream ↔ OpenAI Realtime
+    personas.js           # CRUD/Activate/Preview persona + active persona lookup
+  server/
+    createServer.js       # รวบ Fastify instance + register plugin/routes
+  tunneling/
+    ngrok.js              # helper สำหรับสร้าง tunnel ระหว่าง development
   utils/
-    error-mapper.js     # แปลง error เป็น response มาตรฐาน
-    timing.js
-logger.js               # Logger กลาง (สามารถย้ายไป server/utils ภายหลัง)
-index.js                # Bootstrap สั้น ๆ เรียกใช้ server/app.js
+    auth.js               # ตรวจสอบ Bearer token ผ่าน Supabase Admin API
+  services/
+    personaService.js     # รวม business logic จัดการ persona และเรียก OpenAI preview
 ```
-> หมายเหตุ: โครงสร้างนี้สามารถสร้างทีละส่วน โดยย้าย logic จาก `index.js` ปัจจุบันเข้าสู่ไฟล์เฉพาะทางตามหมวดหมู่ข้างต้น
+> โครงสร้างนี้ถูกย้ายจริงในโค้ดแล้ว ทำให้ logic แต่ละส่วนถูกแยกจากกันชัดเจนและพร้อมต่อยอด
 
 ## 3. Flow หลักของระบบ
 1. **สายเข้า (Twilio Webhook `/incoming-call`)**
@@ -42,10 +45,11 @@ index.js                # Bootstrap สั้น ๆ เรียกใช้ se
    - รับ `start`, `media`, `mark` event จาก Twilio แล้วส่งต่อเสียงไป OpenAI Realtime API
    - รับเสียงตอบกลับจาก OpenAI แล้วส่งกลับ Twilio พร้อมจัดการ interrupt/truncate
    - เก็บ context เช่น `streamSid`, `latestMediaTimestamp`, `lastAssistantItem`
-3. **Personas API (CRUD + Activate + Preview)**
-   - ใช้ Supabase service key ฝั่งเซิร์ฟเวอร์สำหรับ lookup persona ทั้งหมด
+3. **Personas API (CRUD + Activate + Preview + Active Persona)**
+   - ใช้ `PersonaService` เป็นตัวกลางรวม business rule ทั้งหมดและซ่อนรายละเอียด Supabase/OpenAI
    - ทุก endpoint ที่แก้ไขข้อมูลต้องตรวจสอบ Bearer Token ผ่าน Supabase Admin API
-   - Endpoint `preview` เปิด WebSocket ชั่วคราวกับ OpenAI เพื่อสร้างไฟล์เสียงตัวอย่างและคืนค่า base64
+   - Endpoint `preview` เปิด WebSocket ชั่วคราวกับ OpenAI ผ่าน `OpenAiRealtimeClient` เพื่อสร้างไฟล์เสียงตัวอย่างและคืนค่า base64
+   - Endpoint `GET /api/personas/active` ช่วยให้ frontend/backend อื่น ๆ ดึง persona ที่กำลังใช้ได้ง่ายสำหรับปรับแต่ง AI
 
 ## 4. การแยก Logic และเลเยอร์
 - **Route Layer**: รับ request/response, เรียกใช้ service, แปลง error ด้วย `error-mapper`
