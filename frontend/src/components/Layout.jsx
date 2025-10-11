@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Phone, Settings, Key, ChartBar as BarChart3, FileText, Menu, X, LogOut } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import { supabase } from '../lib/supabase';
@@ -8,6 +8,7 @@ const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const nav = useNavigate();
+  const navRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -30,18 +31,41 @@ const Layout = ({ children }) => {
     { name: 'Call Logs', icon: FileText, href: '/logs', current: false },
   ];
 
+  // Focus first navigation link when sidebar opens (mobile)
+  useEffect(() => {
+    if (sidebarOpen) {
+      setTimeout(() => {
+        try {
+          navRef.current?.querySelector('a')?.focus();
+        } catch (e) {
+          /* ignore */
+        }
+      }, 100);
+    }
+  }, [sidebarOpen]);
+
   return (
   <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+      {/* Skip link for keyboard users */}
+      <a href="#main" className="sr-only focus:not-sr-only z-50 p-2 bg-white dark:bg-gray-800 rounded mt-2 ml-2">
+        Skip to main content
+      </a>
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-gray-900 bg-opacity-50 z-20 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          role="presentation"
+          aria-hidden="true"
         />
       )}
 
-      {/* Sidebar */}
-      <aside
+      {/* Sidebar / navigation */}
+      <nav
+        id="sidebar-navigation"
+        ref={navRef}
+        role="navigation"
+        aria-label="Primary Navigation"
         className={`fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-200 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0 rounded-r-2xl shadow-lg/5`}
@@ -56,12 +80,15 @@ const Layout = ({ children }) => {
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden text-gray-500 hover:text-gray-700"
+            aria-label="Close sidebar"
+            aria-controls="sidebar-navigation"
+            aria-expanded={sidebarOpen}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-  <nav className="p-4 space-y-2">
+  <nav className="p-4 space-y-2" aria-label="Main Navigation">
           {navigation.map((item) => {
             const Icon = item.icon;
             return (
@@ -73,6 +100,7 @@ const Layout = ({ children }) => {
                     ? 'bg-primary-50 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
+                aria-current={item.current ? 'page' : undefined}
               >
                 <Icon className="w-5 h-5" />
                 <span className="font-medium">{item.name}</span>
@@ -82,7 +110,7 @@ const Layout = ({ children }) => {
         </nav>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-gradient-to-t from-white/50 dark:from-gray-800/50">
-          <div className="flex items-center space-x-3 px-4 py-3">
+          <div className="flex items-center space-x-3 px-4 py-3" role="complementary" aria-label="User profile">
             <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-200">U</div>
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-900 dark:text-white">User</p>
@@ -90,16 +118,19 @@ const Layout = ({ children }) => {
             </div>
           </div>
         </div>
-      </aside>
+      </nav>
 
       {/* Main content */}
       <div className="lg:pl-64">
-        {/* Top bar */}
-        <header className="sticky top-0 z-10 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
+        {/* Top bar / banner */}
+        <header role="banner" className="sticky top-0 z-10 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between h-16 px-6">
             <button
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              aria-label="Open sidebar"
+              aria-controls="sidebar-navigation"
+              aria-expanded={sidebarOpen}
             >
               <Menu className="w-6 h-6" />
             </button>

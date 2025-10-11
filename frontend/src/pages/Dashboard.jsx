@@ -78,13 +78,13 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+      <header role="region" aria-labelledby="dashboard-heading">
+        <h1 id="dashboard-heading" className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="mt-1 text-sm text-gray-500">Overview of your AI voice assistant</p>
-      </div>
+      </header>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <section role="region" aria-label="Statistics Overview" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
@@ -102,12 +102,12 @@ const Dashboard = () => {
             </div>
           );
         })}
-      </div>
+      </section>
 
       {/* Active Configuration */}
       {stats.activeConfig && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Configuration</h2>
+        <section role="region" aria-labelledby="active-config-heading" className="bg-white rounded-lg shadow p-6">
+          <h2 id="active-config-heading" className="text-lg font-semibold text-gray-900 mb-4">Active Configuration</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600">Name</p>
@@ -123,33 +123,32 @@ const Dashboard = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600">Greeting</p>
-              <p className="font-medium">
-                {stats.activeConfig.enable_greeting ? 'Enabled' : 'Disabled'}
-              </p>
+              <p className="font-medium">{stats.activeConfig.enable_greeting ? 'Enabled' : 'Disabled'}</p>
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* Recent Calls */}
-      <div className="bg-white rounded-lg shadow">
+      <section role="region" aria-labelledby="recent-calls-heading" className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Calls</h2>
+          <h2 id="recent-calls-heading" className="text-lg font-semibold text-gray-900">Recent Calls</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200" role="table" aria-label="Recent Calls Table">
+            <caption className="sr-only">Recent calls list showing from, duration, status and time</caption>
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   From
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Duration
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Time
                 </th>
               </tr>
@@ -184,7 +183,7 @@ const Dashboard = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 };
