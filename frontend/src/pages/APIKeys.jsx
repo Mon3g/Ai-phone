@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Eye,
   EyeOff,
   Save,
   RefreshCw,
   ExternalLink,
-  CircleCheck as CheckCircle,
-  Circle as XCircle,
+  Copy,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const APIKeys = () => {
   const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
   const [showKeys, setShowKeys] = useState({
     openai: false,
     twilio_auth: false,
@@ -25,9 +25,11 @@ const APIKeys = () => {
     ngrok_auth_token: '',
   });
   const [webhookUrl, setWebhookUrl] = useState('https://your-ngrok-url.ngrok.app/incoming-call');
+  const headingRef = useRef(null);
 
   useEffect(() => {
     fetchConfig();
+    headingRef.current?.focus();
   }, []);
 
   const fetchConfig = async () => {
@@ -54,8 +56,10 @@ const APIKeys = () => {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e) => {
+    e.preventDefault();
     setSaving(true);
+    setMessage('');
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -80,53 +84,56 @@ const APIKeys = () => {
     }
 
     setSaving(false);
+    setMessage('API keys saved successfully.');
+    setTimeout(() => setMessage(''), 3000);
   };
 
   const toggleShowKey = (key) => {
     setShowKeys({ ...showKeys, [key]: !showKeys[key] });
   };
 
-  const maskKey = (key, visible) => {
-    if (!key) return '';
-    if (visible) return key;
-    return '*'.repeat(Math.min(key.length, 40));
-  };
-
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
+    setMessage('Webhook URL copied to clipboard.');
+    setTimeout(() => setMessage(''), 3000);
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <form className="space-y-6" onSubmit={handleSave} aria-labelledby="page-heading">
+      <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">API Keys</h1>
+          <h1 id="page-heading" ref={headingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900 focus:outline-none">API Keys</h1>
           <p className="mt-1 text-sm text-gray-500">Configure your API keys and credentials</p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
-        >
-          {saving ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Saving...</span>
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4" />
-              <span>Save Keys</span>
-            </>
-          )}
-        </button>
-      </div>
+        <div className="flex items-center space-x-2">
+          <div role="status" aria-live="polite" className="text-sm text-green-600">
+            {message}
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Save Keys</span>
+              </>
+            )}
+          </button>
+        </div>
+      </header>
 
       {/* OpenAI Section */}
-      <div className="bg-white rounded-lg shadow">
+      <section role="region" aria-labelledby="openai-heading" className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">OpenAI</h2>
+            <h2 id="openai-heading" className="text-lg font-semibold text-gray-900">OpenAI</h2>
             <p className="text-sm text-gray-500">Configure OpenAI API access</p>
           </div>
           <a
@@ -140,9 +147,10 @@ const APIKeys = () => {
           </a>
         </div>
         <div className="p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">API Key</label>
+          <label htmlFor="openai-key" className="block text-sm font-medium text-gray-700 mb-2">API Key</label>
           <div className="flex space-x-2">
             <input
+              id="openai-key"
               type={showKeys.openai ? 'text' : 'password'}
               value={config.openai_api_key}
               onChange={(e) => setConfig({ ...config, openai_api_key: e.target.value })}
@@ -150,20 +158,22 @@ const APIKeys = () => {
               placeholder="sk-..."
             />
             <button
+              type="button"
               onClick={() => toggleShowKey('openai')}
               className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              aria-label={showKeys.openai ? 'Hide OpenAI API Key' : 'Show OpenAI API Key'}
             >
               {showKeys.openai ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Twilio Section */}
-      <div className="bg-white rounded-lg shadow">
+      <section role="region" aria-labelledby="twilio-heading" className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Twilio</h2>
+            <h2 id="twilio-heading" className="text-lg font-semibold text-gray-900">Twilio</h2>
             <p className="text-sm text-gray-500">Configure Twilio phone service</p>
           </div>
           <a
@@ -178,8 +188,9 @@ const APIKeys = () => {
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Account SID</label>
+            <label htmlFor="twilio-sid" className="block text-sm font-medium text-gray-700 mb-2">Account SID</label>
             <input
+              id="twilio-sid"
               type="text"
               value={config.twilio_account_sid}
               onChange={(e) => setConfig({ ...config, twilio_account_sid: e.target.value })}
@@ -188,9 +199,10 @@ const APIKeys = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Auth Token</label>
+            <label htmlFor="twilio-token" className="block text-sm font-medium text-gray-700 mb-2">Auth Token</label>
             <div className="flex space-x-2">
               <input
+                id="twilio-token"
                 type={showKeys.twilio_auth ? 'text' : 'password'}
                 value={config.twilio_auth_token}
                 onChange={(e) => setConfig({ ...config, twilio_auth_token: e.target.value })}
@@ -198,20 +210,19 @@ const APIKeys = () => {
                 placeholder="Your auth token"
               />
               <button
+                type="button"
                 onClick={() => toggleShowKey('twilio_auth')}
                 className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                aria-label={showKeys.twilio_auth ? 'Hide Twilio Auth Token' : 'Show Twilio Auth Token'}
               >
-                {showKeys.twilio_auth ? (
-                  <EyeOff className="w-5 h-5" />
-                ) : (
-                  <Eye className="w-5 h-5" />
-                )}
+                {showKeys.twilio_auth ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+            <label htmlFor="twilio-phone" className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
             <input
+              id="twilio-phone"
               type="text"
               value={config.twilio_phone_number}
               onChange={(e) => setConfig({ ...config, twilio_phone_number: e.target.value })}
@@ -220,13 +231,13 @@ const APIKeys = () => {
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {/* ngrok Section */}
-      <div className="bg-white rounded-lg shadow">
+      <section role="region" aria-labelledby="ngrok-heading" className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">ngrok</h2>
+            <h2 id="ngrok-heading" className="text-lg font-semibold text-gray-900">ngrok</h2>
             <p className="text-sm text-gray-500">Configure ngrok tunnel (optional)</p>
           </div>
           <a
@@ -241,9 +252,10 @@ const APIKeys = () => {
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Auth Token</label>
+            <label htmlFor="ngrok-token" className="block text-sm font-medium text-gray-700 mb-2">Auth Token</label>
             <div className="flex space-x-2">
               <input
+                id="ngrok-token"
                 type={showKeys.ngrok ? 'text' : 'password'}
                 value={config.ngrok_auth_token}
                 onChange={(e) => setConfig({ ...config, ngrok_auth_token: e.target.value })}
@@ -251,38 +263,43 @@ const APIKeys = () => {
                 placeholder="Your ngrok auth token"
               />
               <button
+                type="button"
                 onClick={() => toggleShowKey('ngrok')}
                 className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                aria-label={showKeys.ngrok ? 'Hide ngrok Auth Token' : 'Show ngrok Auth Token'}
               >
                 {showKeys.ngrok ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
           </div>
 
-          {/* Webhook URL */}
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h3 className="text-sm font-medium text-blue-900 mb-2">Twilio Webhook URL</h3>
+            <h3 id="webhook-heading" className="text-sm font-medium text-blue-900 mb-2">Twilio Webhook URL</h3>
             <p className="text-sm text-blue-700 mb-2">
               Set this URL in your Twilio phone number configuration under "A call comes in"
             </p>
             <div className="flex space-x-2">
               <input
                 type="text"
+                aria-labelledby="webhook-heading"
                 value={webhookUrl}
                 readOnly
                 className="flex-1 px-4 py-2 bg-white border border-blue-300 rounded-lg text-sm"
               />
               <button
+                type="button"
                 onClick={() => copyToClipboard(webhookUrl)}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm"
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm flex items-center space-x-2"
+                aria-label="Copy webhook URL to clipboard"
               >
-                Copy
+                <Copy className="w-4 h-4" />
+                <span>Copy</span>
               </button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </form>
   );
 };
 

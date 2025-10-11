@@ -26,6 +26,7 @@ const AIConfig = () => {
   const [previewPersona, setPreviewPersona] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const headingRef = useRef(null);
 
   const voices = [
     { id: 'alloy', name: 'Alloy', description: 'Neutral and balanced' },
@@ -39,6 +40,7 @@ const AIConfig = () => {
   useEffect(() => {
     fetchConfig();
     fetchPersonas();
+    headingRef.current?.focus();
   }, []);
 
   const fetchConfig = async () => {
@@ -175,98 +177,19 @@ const AIConfig = () => {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Persona list */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium">Personas</h2>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => {
-              setSelectedPersonaId(null);
-              setConfig({
-                name: 'New Persona',
-                system_message:
-                  'You are the phone assistant for Kitchener Thai Massage. Speak in a friendly, bright, and professional tone with a subtle Canadian-English cadence. Use English only. Keep sentences short and clear, and pause briefly after questions. When booking, collect service, date/time, name, and phone number, then repeat to confirm. If asked, offer to transfer to a human. Do not use Thai.',
-                voice: 'shimmer',
-                temperature: 0.25,
-                initial_greeting: 'Hello, Kitchener Thai Massage. How can I help you today?',
-                enable_greeting: true,
-                is_active: false,
-              });
-              setInitialConfig(null);
-            }}
-            className="px-3 py-1 text-sm bg-gray-100 rounded"
-          >
-            New Persona
-          </button>
-          <button
-            onClick={() => fileInputRef.current && fileInputRef.current.click()}
-            className="px-3 py-1 text-sm bg-gray-50 rounded border border-gray-200"
-          >
-            Open Local Preview
-          </button>
-          <button
-            onClick={handleCreatePersona}
-            disabled={saving}
-            className="px-3 py-1 text-sm bg-primary-600 text-white rounded disabled:opacity-50"
-          >
-            Create from Form
-          </button>
-        </div>
-      </div>
-
-      {/* hidden file input for local preview import */}
-      <input
-        ref={fileInputRef}
-        onChange={handleFileInputChange}
-        type="file"
-        accept="audio/*"
-        style={{ display: 'none' }}
-      />
-
-      <div>
-        <div className="overflow-x-auto -mx-4 px-4">
-          <div className="inline-flex gap-4 py-2 min-w-[640px]">
-            {personas.map((p) => (
-              <div key={p.id} className="w-64">
-                <PersonaCard
-                  persona={p}
-                  onEdit={(persona) => handleSelectPersona(persona)}
-                  onActivate={(id) => handleActivatePersona(id)}
-                  onPreview={async (persona) => {
-                    // fetch preview audio and play inline in modal
-                    try {
-                      const res = await fetch(`/api/personas/${persona.id}/preview`, { method: 'POST' });
-                      if (!res.ok) throw new Error('preview failed');
-                      const json = await res.json();
-                      const bytes = Uint8Array.from(atob(json.audio_base64), (c) => c.charCodeAt(0));
-                      const blob = new Blob([bytes], { type: json.content_type || 'audio/wav' });
-                      const url = URL.createObjectURL(blob);
-                      // open preview modal with audio player
-                      // cleanup previous preview if any
-                      if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
-                      setPreviewAudioUrl(url);
-                      setPreviewPersona(persona);
-                      setPreviewOpen(true);
-                    } catch (err) {
-                      console.error('preview error', err);
-                      alert('Preview failed');
-                    }
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between">
+      <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI Configuration</h1>
+          <h1 id="page-heading" ref={headingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900 focus:outline-none">
+            AI Configuration
+          </h1>
           <p className="mt-1 text-sm text-gray-500">
             Customize your AI assistant's behavior and personality
           </p>
         </div>
         <div className="flex items-center space-x-4">
-          {message && <div className="text-sm text-green-600">{message}</div>}
+          <div role="status" aria-live="polite">
+            {message && <div className="text-sm text-green-600">{message}</div>}
+          </div>
           <button
             onClick={handleSave}
             disabled={saving || !isDirty()}
@@ -285,16 +208,100 @@ const AIConfig = () => {
             )}
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="bg-white rounded-lg shadow">
+      <section role="region" aria-labelledby="personas-heading">
+        <div className="flex items-center justify-between">
+          <h2 id="personas-heading" className="text-lg font-medium">Personas</h2>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => {
+                setSelectedPersonaId(null);
+                setConfig({
+                  name: 'New Persona',
+                  system_message:
+                    'You are the phone assistant for Kitchener Thai Massage. Speak in a friendly, bright, and professional tone with a subtle Canadian-English cadence. Use English only. Keep sentences short and clear, and pause briefly after questions. When booking, collect service, date/time, name, and phone number, then repeat to confirm. If asked, offer to transfer to a human. Do not use Thai.',
+                  voice: 'shimmer',
+                  temperature: 0.25,
+                  initial_greeting: 'Hello, Kitchener Thai Massage. How can I help you today?',
+                  enable_greeting: true,
+                  is_active: false,
+                });
+                setInitialConfig(null);
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 rounded"
+            >
+              New Persona
+            </button>
+            <button
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              className="px-3 py-1 text-sm bg-gray-50 rounded border border-gray-200"
+            >
+              Open Local Preview
+            </button>
+            <button
+              onClick={handleCreatePersona}
+              disabled={saving}
+              className="px-3 py-1 text-sm bg-primary-600 text-white rounded disabled:opacity-50"
+            >
+              Create from Form
+            </button>
+          </div>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          onChange={handleFileInputChange}
+          type="file"
+          accept="audio/*"
+          style={{ display: 'none' }}
+          aria-hidden="true"
+        />
+
+        <div className="mt-4">
+          <div className="overflow-x-auto -mx-4 px-4">
+            <div className="inline-flex gap-4 py-2 min-w-[640px]">
+              {personas.map((p) => (
+                <div key={p.id} className="w-64">
+                  <PersonaCard
+                    persona={p}
+                    onEdit={(persona) => handleSelectPersona(persona)}
+                    onActivate={(id) => handleActivatePersona(id)}
+                    onPreview={async (persona) => {
+                      try {
+                        const res = await fetch(`/api/personas/${persona.id}/preview`, { method: 'POST' });
+                        if (!res.ok) throw new Error('preview failed');
+                        const json = await res.json();
+                        const bytes = Uint8Array.from(atob(json.audio_base64), (c) => c.charCodeAt(0));
+                        const blob = new Blob([bytes], { type: json.content_type || 'audio/wav' });
+                        const url = URL.createObjectURL(blob);
+                        if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
+                        setPreviewAudioUrl(url);
+                        setPreviewPersona(persona);
+                        setPreviewOpen(true);
+                      } catch (err) {
+                        console.error('preview error', err);
+                        alert('Preview failed');
+                      }
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="bg-white rounded-lg shadow" aria-labelledby="config-form-heading">
         <div className="p-6 space-y-6">
-          {/* Configuration Name */}
+          <h2 id="config-form-heading" className="sr-only">Configuration Settings</h2>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="config-name" className="block text-sm font-medium text-gray-700 mb-2">
               Configuration Name
             </label>
             <input
+              id="config-name"
               type="text"
               value={config.name}
               onChange={(e) => setConfig({ ...config, name: e.target.value })}
@@ -303,30 +310,31 @@ const AIConfig = () => {
             />
           </div>
 
-          {/* System Message */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="system-prompt" className="block text-sm font-medium text-gray-700 mb-2">
               System Prompt
-              <span className="ml-2 text-xs text-gray-500">
-                Define your AI's personality and behavior
-              </span>
             </label>
+            <p id="system-prompt-desc" className="text-xs text-gray-500 mb-2">Define your AI's personality and behavior</p>
             <textarea
+              id="system-prompt"
               value={config.system_message}
               onChange={(e) => setConfig({ ...config, system_message: e.target.value })}
               rows={6}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="You are a helpful assistant..."
+              aria-describedby="system-prompt-desc"
             />
           </div>
 
-          {/* Voice Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Voice</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <fieldset>
+            <legend className="block text-sm font-medium text-gray-700 mb-2">Voice</legend>
+            <div role="radiogroup" className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {voices.map((voice) => (
                 <button
                   key={voice.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={config.voice === voice.id}
                   onClick={() => setConfig({ ...config, voice: voice.id })}
                   className={`p-4 border-2 rounded-lg text-left transition-all ${
                     config.voice === voice.id
@@ -339,17 +347,15 @@ const AIConfig = () => {
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
-          {/* Temperature */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="temperature" className="block text-sm font-medium text-gray-700 mb-2">
               Temperature: {config.temperature}
-              <span className="ml-2 text-xs text-gray-500">
-                Controls randomness (0 = focused, 1 = creative)
-              </span>
             </label>
+            <p id="temperature-desc" className="text-xs text-gray-500 mb-2">Controls randomness (0 = focused, 1 = creative)</p>
             <input
+              id="temperature"
               type="range"
               min="0"
               max="1"
@@ -357,28 +363,31 @@ const AIConfig = () => {
               value={config.temperature}
               onChange={(e) => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              aria-describedby="temperature-desc"
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-xs text-gray-500 mt-1" aria-hidden="true">
               <span>More Focused</span>
               <span>More Creative</span>
             </div>
           </div>
 
-          {/* Initial Greeting */}
-          <div>
+          <fieldset>
+            <legend className="sr-only">Initial Greeting Settings</legend>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">Initial Greeting</label>
-              <label className="flex items-center space-x-2">
+              <label htmlFor="initial-greeting" className="block text-sm font-medium text-gray-700">Initial Greeting</label>
+              <div className="flex items-center space-x-2">
                 <input
+                  id="enable-greeting"
                   type="checkbox"
                   checked={config.enable_greeting}
                   onChange={(e) => setConfig({ ...config, enable_greeting: e.target.checked })}
                   className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                 />
-                <span className="text-sm text-gray-600">Enable</span>
-              </label>
+                <label htmlFor="enable-greeting" className="text-sm text-gray-600">Enable</label>
+              </div>
             </div>
             <input
+              id="initial-greeting"
               type="text"
               value={config.initial_greeting}
               onChange={(e) => setConfig({ ...config, initial_greeting: e.target.value })}
@@ -386,44 +395,44 @@ const AIConfig = () => {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
               placeholder="Hello! How can I help you today?"
             />
-          </div>
+          </fieldset>
 
-          {/* Active Status */}
           <div className="pt-4 border-t border-gray-200">
-            <label className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3">
               <input
+                id="set-active"
                 type="checkbox"
                 checked={config.is_active}
                 onChange={(e) => handleActiveToggle(e.target.checked)}
                 className="w-5 h-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
               />
-              <div>
+              <label htmlFor="set-active" className="flex flex-col">
                 <span className="text-sm font-medium text-gray-900">
                   Set as Active Configuration
                 </span>
                 <p className="text-xs text-gray-500">
                   This configuration will be used for incoming calls
                 </p>
-              </div>
-            </label>
+              </label>
+            </div>
           </div>
         </div>
-      </div>
+      </form>
 
       {/* Persona Edit / Create Modal */}
       <Modal
         open={!!selectedPersonaId || initialConfig === null}
         onClose={() => {
           setSelectedPersonaId(null);
-          // reset to last saved config
           fetchConfig();
         }}
         title={selectedPersonaId ? 'Edit Persona' : 'New Persona'}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+            <label htmlFor="persona-name" className="block text-sm font-medium text-gray-700 mb-2">Name</label>
             <input
+              id="persona-name"
               type="text"
               value={config.name}
               onChange={(e) => setConfig({ ...config, name: e.target.value })}
@@ -432,8 +441,9 @@ const AIConfig = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">System Prompt</label>
+            <label htmlFor="persona-prompt" className="block text-sm font-medium text-gray-700 mb-2">System Prompt</label>
             <textarea
+              id="persona-prompt"
               rows={4}
               value={config.system_message}
               onChange={(e) => setConfig({ ...config, system_message: e.target.value })}
@@ -457,7 +467,6 @@ const AIConfig = () => {
                 }
                 setTimeout(() => setMessage(''), 2500);
                 fetchPersonas();
-                // close modal
                 setSelectedPersonaId(null);
               }}
               className="px-4 py-2 bg-primary-600 text-white rounded"
