@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, Download, ListFilter as Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -7,9 +7,12 @@ const CallLogs = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sort, setSort] = useState({ column: 'created_at', direction: 'desc' });
+  const headingRef = useRef(null);
 
   useEffect(() => {
     fetchLogs();
+    headingRef.current?.focus();
   }, []);
 
   const fetchLogs = async () => {
@@ -26,10 +29,17 @@ const CallLogs = () => {
       .from('call_logs')
       .select('*')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+      .order(sort.column, { ascending: sort.direction === 'asc' });
 
     setLogs(data || []);
     setLoading(false);
+  };
+
+  const handleSort = (column) => {
+    const direction = sort.column === column && sort.direction === 'asc' ? 'desc' : 'asc';
+    setSort({ column, direction });
+    // Re-fetch logs with new sorting
+    fetchLogs();
   };
 
   const filteredLogs = logs.filter((log) => {
@@ -77,11 +87,20 @@ const CallLogs = () => {
     }
   };
 
+  const tableHeaders = [
+    { key: 'created_at', label: 'Date & Time' },
+    { key: 'from_number', label: 'From' },
+    { key: 'to_number', label: 'To' },
+    { key: 'duration', label: 'Duration' },
+    { key: 'status', label: 'Status' },
+    { key: 'call_sid', label: 'Call SID' },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Call Logs</h1>
+          <h1 id="page-heading" ref={headingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900 focus:outline-none">Call Logs</h1>
           <p className="mt-1 text-sm text-gray-500">View and manage your call history</p>
         </div>
         <button
@@ -91,14 +110,16 @@ const CallLogs = () => {
           <Download className="w-4 h-4" />
           <span>Export CSV</span>
         </button>
-      </div>
+      </header>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4">
+      <section role="search" aria-labelledby="filter-heading" className="bg-white rounded-lg shadow p-4">
+        <h2 id="filter-heading" className="sr-only">Filter call logs</h2>
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
+            <label htmlFor="search-term" className="sr-only">Search by phone number or Call SID</label>
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
+              id="search-term"
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -107,8 +128,10 @@ const CallLogs = () => {
             />
           </div>
           <div className="relative">
+            <label htmlFor="status-filter" className="sr-only">Filter by status</label>
             <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <select
+              id="status-filter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none bg-white"
@@ -121,45 +144,40 @@ const CallLogs = () => {
             </select>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200" aria-busy={loading}>
+            <caption className="sr-only">Call history table</caption>
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date & Time
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  From
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  To
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Duration
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Call SID
-                </th>
+                {tableHeaders.map(header => (
+                  <th
+                    key={header.key}
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    aria-sort={sort.column === header.key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <button onClick={() => handleSort(header.key)} className="flex items-center space-x-1">
+                      <span>{header.label}</span>
+                      {/* Add sort icons here if desired */}
+                    </button>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500">
-                    Loading...
+                  <td colSpan={tableHeaders.length} className="px-6 py-8 text-center text-sm text-gray-500">
+                    <div role="status">Loading...</div>
                   </td>
                 </tr>
               ) : filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500">
-                    No call logs found
+                  <td colSpan={tableHeaders.length} className="px-6 py-8 text-center text-sm text-gray-500">
+                    <div role="status">No call logs found</div>
                   </td>
                 </tr>
               ) : (
@@ -195,10 +213,9 @@ const CallLogs = () => {
         </div>
       </div>
 
-      {/* Stats */}
       {filteredLogs.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-sm font-medium text-gray-700 mb-4">Statistics</h3>
+        <section role="region" aria-labelledby="stats-heading" className="bg-white rounded-lg shadow p-6">
+          <h3 id="stats-heading" className="text-sm font-medium text-gray-700 mb-4">Call Statistics</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <p className="text-2xl font-bold text-gray-900">{filteredLogs.length}</p>
@@ -227,7 +244,7 @@ const CallLogs = () => {
               <p className="text-sm text-gray-500">Failed</p>
             </div>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
