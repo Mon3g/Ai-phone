@@ -2,10 +2,10 @@
   "name": "speech-assistant-openai-realtime-api-node",
   "version": "1.0.1",
   "description": "This application demonstrates how to use Node.js, [Twilio Voice](https://www.twilio.com/docs/voice) and [Media Streams](https://www.twilio.com/docs/voice/media-streams), and [OpenAI's Realtime API](https://platform.openai.com/docs/) to make a phone call to speak with an AI Assistant.",
-  "main": "index.js",
+  "main": "src/main.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js",
+    "start": "node src/main.js",
+    "dev": "node src/main.js",
     "configure-twilio": "node ./scripts/configure-twilio.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint:frontend": "cd frontend && npm run lint",
