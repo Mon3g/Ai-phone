@@ -47,7 +47,7 @@ Once the tunnel has been opened, copy the `Forwarding` URL. It will look somethi
 need this when configuring your Twilio number setup.
 
 Note that the `ngrok` command above forwards to a development server running on port `5050`, which is the default port configured in this application. If
-you override the `PORT` defined in `index.js`, you will need to update the `ngrok` command accordingly.
+you override the `PORT` environment variable (see `src/config/env.js`), you will need to update the `ngrok` command accordingly.
 
 Keep in mind that each time you run the `ngrok http` command, a new URL will be created, and you'll need to update it everywhere it is referenced below.
 
@@ -103,7 +103,7 @@ If you accidentally committed secrets, rotate/revoke them and consider removing 
 Once ngrok is running, dependencies are installed, Twilio is configured properly, and the `.env` is set up, run the dev server with the following command:
 
 ```
-node index.js
+npm run dev
 ```
 
 ## Test the app

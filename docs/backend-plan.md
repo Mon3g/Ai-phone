@@ -8,30 +8,30 @@
 
 ## 2. โครงสร้างไดเรกทอรีที่เสนอ
 ```text
-server/
-  app.js                # จุดเริ่มต้นบูต Fastify instance และ Plugin
+src/
+  main.js                 # bootstrap หลักสำหรับ production + graceful shutdown
   config/
-    env.js              # รวมการอ่านค่าตัวแปรสภาพแวดล้อม/Default
-  routes/
-    health.js
-    calls.js            # Twilio webhook + media stream handlers
-    personas.js
-  services/
-    personas.js         # ติดต่อ Supabase และบังคับใช้กฎธุรกิจ
-    realtime.js         # เชื่อมต่อ OpenAI Realtime API
+    env.js                # รวมค่าจาก environment พร้อม default
   integrations/
-    supabase.js         # Wrapper สำหรับสร้าง client และ cache connection
-    twilio.js           # Helper สำหรับ TwiML และ media utils
+    supabase.js           # สร้าง Supabase client ฝั่งเซิร์ฟเวอร์
+  observability/
+    logger.js             # ตั้งค่า Pino transport (stdout + ไฟล์)
   plugins/
-    auth.js             # Bearer verification + Fastify decorator
-    logger.js           # เชื่อม Pino logger กับ Fastify
+    contentParsers.js     # parser พิเศษ (empty JSON)
+    loggingHooks.js       # hook onRequest/onResponse/onError + error handler
+  routes/
+    root.js               # healthcheck และ root message
+    incomingCall.js       # Twilio webhook -> TwiML + persona greeting
+    mediaStream.js        # Twilio media stream ↔ OpenAI Realtime
+    personas.js           # CRUD/Activate/Preview persona
+  server/
+    createServer.js       # รวบ Fastify instance + register plugin/routes
+  tunneling/
+    ngrok.js              # helper สำหรับสร้าง tunnel ระหว่าง development
   utils/
-    error-mapper.js     # แปลง error เป็น response มาตรฐาน
-    timing.js
-logger.js               # Logger กลาง (สามารถย้ายไป server/utils ภายหลัง)
-index.js                # Bootstrap สั้น ๆ เรียกใช้ server/app.js
+    auth.js               # ตรวจสอบ Bearer token ผ่าน Supabase Admin API
 ```
-> หมายเหตุ: โครงสร้างนี้สามารถสร้างทีละส่วน โดยย้าย logic จาก `index.js` ปัจจุบันเข้าสู่ไฟล์เฉพาะทางตามหมวดหมู่ข้างต้น
+> โครงสร้างนี้ถูกย้ายจริงในโค้ดแล้ว ทำให้ logic แต่ละส่วนถูกแยกจากกันชัดเจนและพร้อมต่อยอด
 
 ## 3. Flow หลักของระบบ
 1. **สายเข้า (Twilio Webhook `/incoming-call`)**
