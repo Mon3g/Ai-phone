@@ -17,8 +17,8 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/ai-config" element={<PrivateRoute><AIConfig /></PrivateRoute>} />
-            <Route path="/api-keys" element={<APIKeys />} />
-            <Route path="/logs" element={<CallLogs />} />
+            <Route path="/api-keys" element={<PrivateRoute><APIKeys /></PrivateRoute>} />
+            <Route path="/logs" element={<PrivateRoute><CallLogs /></PrivateRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
