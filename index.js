@@ -6,6 +6,8 @@ import fastifyWs from '@fastify/websocket';
 import ngrok from '@ngrok/ngrok';
 import { createClient } from '@supabase/supabase-js';
 import logger from './logger.js';
+import { createMcpClients, getMcpTools, closeMcpClients } from './tools/mcp-client.js';
+import { dispatchTool } from './tools/dispatcher.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -105,12 +107,11 @@ const SHOW_TIMING_MATH = false;
 // Supabase client for server-side persona management
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
-let supabase = null;
-if (supabaseUrl && supabaseServiceKey) {
-  supabase = createClient(supabaseUrl, supabaseServiceKey);
-} else {
-  logger.warn('Supabase service key or URL not provided; persona APIs will be disabled.');
+if (!supabaseUrl || !supabaseServiceKey) {
+  logger.fatal('SUPABASE_URL and SUPABASE_SERVICE_KEY are required. Set them in your .env file.');
+  process.exit(1);
 }
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Helper: Verify Bearer token from Authorization header using Supabase Admin client
 async function verifyAuth(request) {
@@ -139,19 +140,13 @@ fastify.get('/health', async (request, reply) => {
 // Route for Twilio to handle incoming calls
 // <Say> punctuation to improve text-to-speech translation
 fastify.all('/incoming-call', async (request, reply) => {
-  // Try to read active persona from Supabase (server key required)
+  // Load active persona from Supabase
   let persona = null;
-  if (supabase) {
-    try {
-      const { data } = await supabase
-        .from('personas')
-        .select('*')
-        .eq('is_active', true)
-        .maybeSingle();
-      if (data) persona = data;
-    } catch (err) {
-      logger.error({ err }, 'Error fetching active persona');
-    }
+  try {
+    const { data } = await supabase.from('personas').select('*').eq('is_active', true).maybeSingle();
+    if (data) persona = data;
+  } catch (err) {
+    logger.error({ err }, 'Error fetching active persona');
   }
 
   const voice = persona?.voice || VOICE;
@@ -161,13 +156,16 @@ fastify.all('/incoming-call', async (request, reply) => {
     greeting ||
     'Please wait while we connect your call to the A. I. voice assistant, powered by Twilio and the Open A I Realtime API';
 
+  // Pass the persona ID as a query param so the media-stream handler can reload it
+  const streamParams = persona?.id ? `?personaId=${encodeURIComponent(persona.id)}` : '';
+
   const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
                           <Response>
                               <Say voice="Google.en-US-Chirp3-HD-Aoede">${sayIntro}</Say>
                               <Pause length="1"/>
                               <Say voice="Google.en-US-Chirp3-HD-Aoede">O.K. you can start talking!</Say>
                               <Connect>
-                                  <Stream url="wss://${request.headers.host}/media-stream" />
+                                  <Stream url="wss://${request.headers.host}/media-stream${streamParams}" />
                               </Connect>
                           </Response>`;
 
@@ -176,12 +174,12 @@ fastify.all('/incoming-call', async (request, reply) => {
 
 // Minimal Personas API (server-side)
 fastify.get('/api/personas', async (request, reply) => {
-  if (!supabase) return reply.code(503).send({ error: 'Supabase not configured' });
+  const { user, error: authError } = await verifyAuth(request);
+  if (authError || !user) return reply.code(401).send({ error: 'unauthenticated' });
   try {
-    const res = await supabase.from('personas').select('*').order('created_at', { ascending: false });
+    const res = await supabase.from('personas').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
     logger.debug({ result: res }, 'Supabase /personas result');
-    const { data } = res;
-    reply.send(data);
+    reply.send(res.data);
   } catch (err) {
     logger.error({ err }, 'Error listing personas');
     reply.code(500).send({ error: 'list failed' });
@@ -189,7 +187,6 @@ fastify.get('/api/personas', async (request, reply) => {
 });
 
 fastify.post('/api/personas', async (request, reply) => {
-  if (!supabase) return reply.code(503).send({ error: 'Supabase not configured' });
   // Require valid user token
   const { user, error: authError } = await verifyAuth(request);
   if (authError || !user) return reply.code(401).send({ error: 'unauthenticated' });
@@ -207,7 +204,6 @@ fastify.post('/api/personas', async (request, reply) => {
 });
 
 fastify.put('/api/personas/:id', async (request, reply) => {
-  if (!supabase) return reply.code(503).send({ error: 'Supabase not configured' });
   const { user, error: authError } = await verifyAuth(request);
   if (authError || !user) return reply.code(401).send({ error: 'unauthenticated' });
 
@@ -227,7 +223,6 @@ fastify.put('/api/personas/:id', async (request, reply) => {
 });
 
 fastify.post('/api/personas/:id/activate', async (request, reply) => {
-  if (!supabase) return reply.code(503).send({ error: 'Supabase not configured' });
   const { user, error: authError } = await verifyAuth(request);
   if (authError || !user) return reply.code(401).send({ error: 'unauthenticated' });
 
@@ -253,7 +248,6 @@ fastify.post('/api/personas/:id/activate', async (request, reply) => {
 
 // Preview endpoint: generate short TTS/audio sample for a persona using OpenAI Realtime
 fastify.post('/api/personas/:id/preview', async (request, reply) => {
-  if (!supabase) return reply.code(503).send({ error: 'Supabase not configured' });
   const { id } = request.params;
   try {
     const { data: persona, error: perr } = await supabase.from('personas').select('*').eq('id', id).maybeSingle();
@@ -370,8 +364,26 @@ fastify.post('/api/personas/:id/preview', async (request, reply) => {
 
 // WebSocket route for media-stream
 fastify.register(async (fastify) => {
-  fastify.get('/media-stream', { websocket: true }, (connection, req) => {
-    logger.info({ streamSid: null, remoteAddress: req.socket.remoteAddress }, 'Client connected');
+  fastify.get('/media-stream', { websocket: true }, async (connection, req) => {
+    logger.info({ remoteAddress: req.socket.remoteAddress }, 'Client connected');
+
+    // Load persona and its tool / MCP config before touching OpenAI
+    const personaId = req.query?.personaId;
+    let persona = null;
+    if (personaId) {
+      try {
+        const { data } = await supabase.from('personas').select('*').eq('id', personaId).maybeSingle();
+        persona = data;
+      } catch (err) {
+        logger.error({ err, personaId }, 'Error loading persona for media stream');
+      }
+    }
+
+    // Spin up any MCP servers configured on the persona
+    let mcpClients = new Map();
+    if (persona?.mcp_servers?.length) {
+      mcpClients = await createMcpClients(persona.mcp_servers);
+    }
 
     // Connection-specific state
     let streamSid = null;
@@ -381,7 +393,7 @@ fastify.register(async (fastify) => {
     let responseStartTimestampTwilio = null;
 
     const openAiWs = new WebSocket(
-      `wss://api.openai.com/v1/realtime?model=gpt-realtime&temperature=${TEMPERATURE}`,
+      `wss://api.openai.com/v1/realtime?model=gpt-realtime&temperature=${persona?.temperature ?? TEMPERATURE}`,
       {
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -389,8 +401,11 @@ fastify.register(async (fastify) => {
       }
     );
 
-    // Control initial session with OpenAI
-    const initializeSession = () => {
+    // Build the session update including any tools defined on the persona or from MCP
+    const initializeSession = async () => {
+      const mcpTools = mcpClients.size > 0 ? await getMcpTools(mcpClients) : [];
+      const allTools = [...(persona?.tools || []), ...mcpTools];
+
       const sessionUpdate = {
         type: 'session.update',
         session: {
@@ -399,17 +414,15 @@ fastify.register(async (fastify) => {
           output_modalities: ['audio'],
           audio: {
             input: { format: { type: 'audio/pcmu' }, turn_detection: { type: 'server_vad' } },
-            output: { format: { type: 'audio/pcmu' }, voice: VOICE },
+            output: { format: { type: 'audio/pcmu' }, voice: persona?.voice || VOICE },
           },
-          instructions: SYSTEM_MESSAGE,
+          instructions: persona?.system_message || SYSTEM_MESSAGE,
+          ...(allTools.length > 0 && { tools: allTools, tool_choice: 'auto' }),
         },
       };
 
       logger.debug({ sessionUpdate }, 'Sending session update to OpenAI');
       openAiWs.send(JSON.stringify(sessionUpdate));
-
-      // Uncomment the following line to have AI speak first:
-      // sendInitialConversationItem();
     };
 
     // Send initial conversation item if AI talks first
@@ -439,11 +452,7 @@ fastify.register(async (fastify) => {
         const elapsedTime = latestMediaTimestamp - responseStartTimestampTwilio;
         if (SHOW_TIMING_MATH)
           logger.debug(
-            {
-              latestMediaTimestamp,
-              responseStartTimestampTwilio,
-              elapsedTime,
-            },
+            { latestMediaTimestamp, responseStartTimestampTwilio, elapsedTime },
             'Calculating elapsed time for truncation'
           );
 
@@ -458,12 +467,7 @@ fastify.register(async (fastify) => {
           openAiWs.send(JSON.stringify(truncateEvent));
         }
 
-        connection.send(
-          JSON.stringify({
-            event: 'clear',
-            streamSid: streamSid,
-          })
-        );
+        connection.send(JSON.stringify({ event: 'clear', streamSid }));
 
         // Reset
         markQueue = [];
@@ -488,46 +492,79 @@ fastify.register(async (fastify) => {
     // Open event for OpenAI WebSocket
     openAiWs.on('open', () => {
       logger.info('Connected to the OpenAI Realtime API');
-      setTimeout(initializeSession, 100);
+      setTimeout(() => initializeSession(), 100);
     });
 
     // Listen for messages from the OpenAI WebSocket (and send to Twilio if necessary)
     openAiWs.on('message', (data) => {
-      try {
-        const response = JSON.parse(data);
+      (async () => {
+        try {
+          const response = JSON.parse(data);
 
-        if (LOG_EVENT_TYPES.includes(response.type)) {
-          logger.debug({ response }, `Received event: ${response.type}`);
-        }
-
-        if (response.type === 'response.output_audio.delta' && response.delta) {
-          const audioDelta = {
-            event: 'media',
-            streamSid: streamSid,
-            media: { payload: response.delta },
-          };
-          connection.send(JSON.stringify(audioDelta));
-
-          // First delta from a new response starts the elapsed time counter
-          if (!responseStartTimestampTwilio) {
-            responseStartTimestampTwilio = latestMediaTimestamp;
-            if (SHOW_TIMING_MATH)
-              logger.debug({ responseStartTimestampTwilio }, 'Setting start timestamp for new response');
+          if (LOG_EVENT_TYPES.includes(response.type)) {
+            logger.debug({ response }, `Received event: ${response.type}`);
           }
 
-          if (response.item_id) {
-            lastAssistantItem = response.item_id;
+          if (response.type === 'response.output_audio.delta' && response.delta) {
+            const audioDelta = {
+              event: 'media',
+              streamSid: streamSid,
+              media: { payload: response.delta },
+            };
+            connection.send(JSON.stringify(audioDelta));
+
+            // First delta from a new response starts the elapsed time counter
+            if (!responseStartTimestampTwilio) {
+              responseStartTimestampTwilio = latestMediaTimestamp;
+              if (SHOW_TIMING_MATH)
+                logger.debug({ responseStartTimestampTwilio }, 'Setting start timestamp for new response');
+            }
+
+            if (response.item_id) {
+              lastAssistantItem = response.item_id;
+            }
+
+            sendMark(connection, streamSid);
           }
 
-          sendMark(connection, streamSid);
-        }
+          if (response.type === 'input_audio_buffer.speech_started') {
+            handleSpeechStartedEvent();
+          }
 
-        if (response.type === 'input_audio_buffer.speech_started') {
-          handleSpeechStartedEvent();
+          // Handle function/tool calls from OpenAI
+          if (response.type === 'response.function_call_arguments.done') {
+            const { call_id, name, arguments: argsJson } = response;
+            logger.info({ call_id, toolName: name }, 'Tool call requested');
+            let args = {};
+            try {
+              args = JSON.parse(argsJson || '{}');
+            } catch {
+              logger.warn({ argsJson }, 'Failed to parse tool arguments');
+            }
+            let result;
+            try {
+              result = await dispatchTool(name, args, mcpClients);
+            } catch (err) {
+              logger.error({ err, toolName: name }, 'Tool dispatch failed');
+              result = { error: err.message };
+            }
+            openAiWs.send(
+              JSON.stringify({
+                type: 'conversation.item.create',
+                item: {
+                  type: 'function_call_output',
+                  call_id,
+                  output: typeof result === 'string' ? result : JSON.stringify(result),
+                },
+              })
+            );
+            openAiWs.send(JSON.stringify({ type: 'response.create' }));
+            logger.info({ call_id, toolName: name }, 'Tool result returned to OpenAI');
+          }
+        } catch (error) {
+          logger.error({ err: error, rawMessage: data.toString() }, 'Error processing OpenAI message');
         }
-      } catch (error) {
-        logger.error({ err: error, rawMessage: data.toString() }, 'Error processing OpenAI message');
-      }
+      })();
     });
 
     // Handle incoming messages from Twilio
@@ -538,8 +575,7 @@ fastify.register(async (fastify) => {
         switch (data.event) {
           case 'media':
             latestMediaTimestamp = data.media.timestamp;
-            if (SHOW_TIMING_MATH)
-              logger.debug({ latestMediaTimestamp }, 'Received media message');
+            if (SHOW_TIMING_MATH) logger.debug({ latestMediaTimestamp }, 'Received media message');
             if (openAiWs.readyState === WebSocket.OPEN) {
               const audioAppend = {
                 type: 'input_audio_buffer.append',
@@ -551,8 +587,6 @@ fastify.register(async (fastify) => {
           case 'start':
             streamSid = data.start.streamSid;
             logger.info({ streamSid }, 'Incoming stream has started');
-
-            // Reset start and media timestamp on a new stream
             responseStartTimestampTwilio = null;
             latestMediaTimestamp = 0;
             break;
@@ -570,9 +604,10 @@ fastify.register(async (fastify) => {
       }
     });
 
-    // Handle connection close
-    connection.on('close', () => {
+    // Handle connection close — also shut down any MCP servers for this session
+    connection.on('close', async () => {
       if (openAiWs.readyState === WebSocket.OPEN) openAiWs.close();
+      await closeMcpClients(mcpClients);
       logger.info('Client disconnected.');
     });
 
