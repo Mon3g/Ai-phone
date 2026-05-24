@@ -65,29 +65,34 @@ const Modal = ({ open, onClose, children, title }) => {
   if (!open) return null;
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+    <div
+      className="fixed inset-0 z-50 flex items-end lg:items-center lg:justify-center lg:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
       onKeyDown={handleTabKey}
     >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div 
+      <div
         ref={modalRef}
-        className="relative w-full sm:max-w-3xl bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl z-10"
+        className="relative w-full lg:max-w-3xl bg-white dark:bg-gray-800 rounded-t-2xl lg:rounded-2xl shadow-2xl z-10 max-h-[85vh] overflow-y-auto"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className="flex items-center justify-between mb-4">
+        {/* Drag handle — mobile only */}
+        <div className="lg:hidden flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
+        </div>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 id="modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
-          <button 
+          <button
             onClick={onClose}
-            className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
+            className="p-2.5 w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="text-gray-600 dark:text-gray-300">{children}</div>
+        <div className="px-6 py-4 text-gray-600 dark:text-gray-300">{children}</div>
       </div>
     </div>
   );
